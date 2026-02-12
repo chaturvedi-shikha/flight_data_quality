@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+from geopy.distance import geodesic
 
 
 class DataQualityChecker:
@@ -211,6 +212,76 @@ class FlightDataValidator:
         
         return self.df[invalid_mask]
     
+    def validate_origin_destination_different(self) -> pd.DataFrame:
+        """
+        Validate that origin and destination airports are different.
+        Flags records where origin == dest (case-insensitive),
+        including empty strings and NaN pairs.
+
+        Returns:
+            DataFrame of rows where origin and destination are the same
+        """
+        if 'origin' not in self.df.columns or 'dest' not in self.df.columns:
+            return pd.DataFrame()
+
+        origin = self.df['origin'].fillna('').str.upper()
+        dest = self.df['dest'].fillna('').str.upper()
+
+        invalid_mask = origin == dest
+        return self.df[invalid_mask]
+
+    def validate_distance_geodesic(self, threshold: float = 0.20) -> pd.DataFrame:
+        """
+        Validate that reported flight distances match expected distances
+        calculated from airport coordinates using geodesic distance.
+
+        Args:
+            threshold: Maximum allowed relative difference (default 0.20 = 20%)
+
+        Returns:
+            DataFrame of flagged rows with expected_distance and actual_distance columns
+        """
+        required_cols = ['origin_lat', 'origin_lon', 'dest_lat', 'dest_lon', 'distance']
+        if not all(col in self.df.columns for col in required_cols):
+            return pd.DataFrame()
+
+        df = self.df.copy()
+
+        # Skip rows with missing coordinate data
+        coord_cols = ['origin_lat', 'origin_lon', 'dest_lat', 'dest_lon']
+        has_coords = df[coord_cols].notna().all(axis=1)
+        df_valid = df[has_coords].copy()
+
+        if df_valid.empty:
+            return pd.DataFrame()
+
+        # Cache geodesic distances per unique route coordinate pair
+        route_keys = df_valid[coord_cols].apply(tuple, axis=1)
+        unique_routes = df_valid[coord_cols].drop_duplicates()
+        distance_cache = {}
+        for _, row in unique_routes.iterrows():
+            key = (row['origin_lat'], row['origin_lon'], row['dest_lat'], row['dest_lon'])
+            distance_cache[key] = geodesic(
+                (key[0], key[1]), (key[2], key[3])
+            ).miles
+
+        df_valid['expected_distance'] = route_keys.map(distance_cache)
+        df_valid['actual_distance'] = df_valid['distance']
+
+        # Flag rows where difference exceeds threshold
+        # Zero reported distance is always flagged when expected > 0
+        # Note: when expected == 0 (same coordinates) and actual > 0, the row
+        # is not flagged — this is intentional as co-located airports are rare
+        # and warrant separate validation.
+        expected = df_valid['expected_distance']
+        actual = df_valid['actual_distance']
+        flagged_mask = (
+            ((expected > 0) & (actual == 0)) |
+            ((expected > 0) & ((actual - expected).abs() / expected > threshold))
+        )
+
+        return df_valid[flagged_mask]
+
     def validate_distance_positive(self) -> pd.DataFrame:
         """
         Validate that all distances are positive
@@ -284,7 +355,9 @@ class DataQualityReport:
             'invalid_airport_codes': len(self.validator.validate_airport_codes()),
             'invalid_dates': len(self.validator.validate_dates()),
             'invalid_delay_logic': len(self.validator.validate_delay_logic()),
-            'invalid_distances': len(self.validator.validate_distance_positive())
+            'invalid_distances': len(self.validator.validate_distance_positive()),
+            'same_origin_destination': len(self.validator.validate_origin_destination_different()),
+            'distance_mismatches': len(self.validator.validate_distance_geodesic())
         }
         
         return report

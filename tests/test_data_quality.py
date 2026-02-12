@@ -177,11 +177,193 @@ class TestFlightDataValidator:
     def test_validate_distance_positive(self, sample_flight_data):
         """Test that all distances are positive"""
         from src.data_quality import FlightDataValidator
-        
+
         validator = FlightDataValidator(sample_flight_data)
         invalid_distances = validator.validate_distance_positive()
-        
+
         assert len(invalid_distances) == 0  # All distances are positive
+
+    def test_validate_origin_dest_different_valid(self, sample_flight_data):
+        """Test valid routes where origin != destination"""
+        from src.data_quality import FlightDataValidator
+
+        validator = FlightDataValidator(sample_flight_data)
+        invalid_routes = validator.validate_origin_destination_different()
+
+        assert len(invalid_routes) == 0  # All routes are valid
+
+    def test_validate_origin_dest_different_same_airport(self):
+        """Test detection of same origin-destination routes"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': ['JFK', 'LAX', 'ORD'],
+            'dest': ['JFK', 'SFO', 'ORD']
+        })
+
+        validator = FlightDataValidator(data)
+        invalid_routes = validator.validate_origin_destination_different()
+
+        assert len(invalid_routes) == 2  # JFK→JFK and ORD→ORD
+
+    def test_validate_origin_dest_different_null_values(self):
+        """Test handling of null values in origin/dest"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': [None, 'LAX', np.nan],
+            'dest': ['JFK', 'SFO', np.nan]
+        })
+
+        validator = FlightDataValidator(data)
+        invalid_routes = validator.validate_origin_destination_different()
+
+        assert len(invalid_routes) == 1  # NaN→NaN should be flagged
+
+    def test_validate_origin_dest_different_empty_strings(self):
+        """Test handling of empty strings in origin/dest"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': ['', 'LAX', 'JFK'],
+            'dest': ['', 'SFO', 'LAX']
+        })
+
+        validator = FlightDataValidator(data)
+        invalid_routes = validator.validate_origin_destination_different()
+
+        assert len(invalid_routes) == 1  # ""→"" should be flagged
+
+    def test_validate_origin_dest_different_case_sensitivity(self):
+        """Test case-insensitive comparison"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': ['JFK', 'lax'],
+            'dest': ['jfk', 'SFO']
+        })
+
+        validator = FlightDataValidator(data)
+        invalid_routes = validator.validate_origin_destination_different()
+
+        assert len(invalid_routes) == 1  # JFK→jfk should be flagged
+
+    def test_validate_distance_accurate(self):
+        """Test accurate distance: JFK→LAX ~2,475 mi matches coordinates (should pass)"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': ['JFK'],
+            'dest': ['LAX'],
+            'origin_lat': [40.6413],
+            'origin_lon': [-73.7781],
+            'dest_lat': [33.9425],
+            'dest_lon': [-118.4081],
+            'distance': [2475.0]
+        })
+
+        validator = FlightDataValidator(data)
+        flagged = validator.validate_distance_geodesic()
+
+        assert len(flagged) == 0  # Accurate distance should not be flagged
+
+    def test_validate_distance_minor_variance(self):
+        """Test minor variance: distance off by 10% (should pass with 20% threshold)"""
+        from src.data_quality import FlightDataValidator
+
+        # JFK→LAX expected ~2,475 mi, report 2,722 (10% over)
+        data = pd.DataFrame({
+            'origin': ['JFK'],
+            'dest': ['LAX'],
+            'origin_lat': [40.6413],
+            'origin_lon': [-73.7781],
+            'dest_lat': [33.9425],
+            'dest_lon': [-118.4081],
+            'distance': [2722.0]
+        })
+
+        validator = FlightDataValidator(data)
+        flagged = validator.validate_distance_geodesic()
+
+        assert len(flagged) == 0  # 10% variance within 20% threshold
+
+    def test_validate_distance_major_variance(self):
+        """Test major variance: distance off by 50% (should flag)"""
+        from src.data_quality import FlightDataValidator
+
+        # JFK→LAX expected ~2,475 mi, report 3,712 (50% over)
+        data = pd.DataFrame({
+            'origin': ['JFK'],
+            'dest': ['LAX'],
+            'origin_lat': [40.6413],
+            'origin_lon': [-73.7781],
+            'dest_lat': [33.9425],
+            'dest_lon': [-118.4081],
+            'distance': [3712.0]
+        })
+
+        validator = FlightDataValidator(data)
+        flagged = validator.validate_distance_geodesic()
+
+        assert len(flagged) == 1  # 50% variance exceeds 20% threshold
+        assert 'expected_distance' in flagged.columns
+
+    def test_validate_distance_missing_coordinates(self):
+        """Test missing coordinates: lat/lon is null (should skip validation)"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': ['JFK', 'LAX'],
+            'dest': ['LAX', 'SFO'],
+            'origin_lat': [40.6413, np.nan],
+            'origin_lon': [-73.7781, np.nan],
+            'dest_lat': [33.9425, np.nan],
+            'dest_lon': [-118.4081, np.nan],
+            'distance': [2475.0, 500.0]
+        })
+
+        validator = FlightDataValidator(data)
+        flagged = validator.validate_distance_geodesic()
+
+        assert len(flagged) == 0  # Missing coords skipped, valid row passes
+
+    def test_validate_distance_same_coordinates(self):
+        """Test edge case: expected distance is 0 (same coords), actual > 0 — not flagged"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': ['AAA'],
+            'dest': ['BBB'],
+            'origin_lat': [40.6413],
+            'origin_lon': [-73.7781],
+            'dest_lat': [40.6413],
+            'dest_lon': [-73.7781],
+            'distance': [100.0]
+        })
+
+        validator = FlightDataValidator(data)
+        flagged = validator.validate_distance_geodesic()
+
+        assert len(flagged) == 0  # Intentionally not flagged; co-located airports are a separate concern
+
+    def test_validate_distance_zero(self):
+        """Test zero distance: reported distance = 0 (should flag)"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': ['JFK'],
+            'dest': ['LAX'],
+            'origin_lat': [40.6413],
+            'origin_lon': [-73.7781],
+            'dest_lat': [33.9425],
+            'dest_lon': [-118.4081],
+            'distance': [0.0]
+        })
+
+        validator = FlightDataValidator(data)
+        flagged = validator.validate_distance_geodesic()
+
+        assert len(flagged) == 1  # Zero distance should be flagged
 
 
 class TestDataQualityReport:
