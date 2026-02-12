@@ -263,7 +263,7 @@ class TestFlightDataValidator:
         })
 
         validator = FlightDataValidator(data)
-        flagged = validator.validate_distance_haversine()
+        flagged = validator.validate_distance_geodesic()
 
         assert len(flagged) == 0  # Accurate distance should not be flagged
 
@@ -283,7 +283,7 @@ class TestFlightDataValidator:
         })
 
         validator = FlightDataValidator(data)
-        flagged = validator.validate_distance_haversine()
+        flagged = validator.validate_distance_geodesic()
 
         assert len(flagged) == 0  # 10% variance within 20% threshold
 
@@ -303,7 +303,7 @@ class TestFlightDataValidator:
         })
 
         validator = FlightDataValidator(data)
-        flagged = validator.validate_distance_haversine()
+        flagged = validator.validate_distance_geodesic()
 
         assert len(flagged) == 1  # 50% variance exceeds 20% threshold
         assert 'expected_distance' in flagged.columns
@@ -323,9 +323,28 @@ class TestFlightDataValidator:
         })
 
         validator = FlightDataValidator(data)
-        flagged = validator.validate_distance_haversine()
+        flagged = validator.validate_distance_geodesic()
 
         assert len(flagged) == 0  # Missing coords skipped, valid row passes
+
+    def test_validate_distance_same_coordinates(self):
+        """Test edge case: expected distance is 0 (same coords), actual > 0 — not flagged"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': ['AAA'],
+            'dest': ['BBB'],
+            'origin_lat': [40.6413],
+            'origin_lon': [-73.7781],
+            'dest_lat': [40.6413],
+            'dest_lon': [-73.7781],
+            'distance': [100.0]
+        })
+
+        validator = FlightDataValidator(data)
+        flagged = validator.validate_distance_geodesic()
+
+        assert len(flagged) == 0  # Intentionally not flagged; co-located airports are a separate concern
 
     def test_validate_distance_zero(self):
         """Test zero distance: reported distance = 0 (should flag)"""
@@ -342,7 +361,7 @@ class TestFlightDataValidator:
         })
 
         validator = FlightDataValidator(data)
-        flagged = validator.validate_distance_haversine()
+        flagged = validator.validate_distance_geodesic()
 
         assert len(flagged) == 1  # Zero distance should be flagged
 

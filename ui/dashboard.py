@@ -203,6 +203,12 @@ def display_validations(report: dict, df: pd.DataFrame):
             delta=None if validations.get('same_origin_destination', 0) == 0 else "Issues found",
             delta_color="inverse"
         )
+        st.metric(
+            "Distance Mismatches",
+            validations.get('distance_mismatches', 0),
+            delta=None if validations.get('distance_mismatches', 0) == 0 else "Issues found",
+            delta_color="inverse"
+        )
     
     # Validation summary chart
     validation_df = pd.DataFrame(list(validations.items()), columns=['Validation', 'Issues'])
