@@ -177,11 +177,76 @@ class TestFlightDataValidator:
     def test_validate_distance_positive(self, sample_flight_data):
         """Test that all distances are positive"""
         from src.data_quality import FlightDataValidator
-        
+
         validator = FlightDataValidator(sample_flight_data)
         invalid_distances = validator.validate_distance_positive()
-        
+
         assert len(invalid_distances) == 0  # All distances are positive
+
+    def test_validate_origin_dest_different_valid(self, sample_flight_data):
+        """Test valid routes where origin != destination"""
+        from src.data_quality import FlightDataValidator
+
+        validator = FlightDataValidator(sample_flight_data)
+        invalid_routes = validator.validate_origin_destination_different()
+
+        assert len(invalid_routes) == 0  # All routes are valid
+
+    def test_validate_origin_dest_different_same_airport(self):
+        """Test detection of same origin-destination routes"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': ['JFK', 'LAX', 'ORD'],
+            'dest': ['JFK', 'SFO', 'ORD']
+        })
+
+        validator = FlightDataValidator(data)
+        invalid_routes = validator.validate_origin_destination_different()
+
+        assert len(invalid_routes) == 2  # JFK→JFK and ORD→ORD
+
+    def test_validate_origin_dest_different_null_values(self):
+        """Test handling of null values in origin/dest"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': [None, 'LAX', np.nan],
+            'dest': ['JFK', 'SFO', np.nan]
+        })
+
+        validator = FlightDataValidator(data)
+        invalid_routes = validator.validate_origin_destination_different()
+
+        assert len(invalid_routes) == 1  # NaN→NaN should be flagged
+
+    def test_validate_origin_dest_different_empty_strings(self):
+        """Test handling of empty strings in origin/dest"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': ['', 'LAX', 'JFK'],
+            'dest': ['', 'SFO', 'LAX']
+        })
+
+        validator = FlightDataValidator(data)
+        invalid_routes = validator.validate_origin_destination_different()
+
+        assert len(invalid_routes) == 1  # ""→"" should be flagged
+
+    def test_validate_origin_dest_different_case_sensitivity(self):
+        """Test case-insensitive comparison"""
+        from src.data_quality import FlightDataValidator
+
+        data = pd.DataFrame({
+            'origin': ['JFK', 'lax'],
+            'dest': ['jfk', 'SFO']
+        })
+
+        validator = FlightDataValidator(data)
+        invalid_routes = validator.validate_origin_destination_different()
+
+        assert len(invalid_routes) == 1  # JFK→jfk should be flagged
 
 
 class TestDataQualityReport:

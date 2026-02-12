@@ -211,6 +211,24 @@ class FlightDataValidator:
         
         return self.df[invalid_mask]
     
+    def validate_origin_destination_different(self) -> pd.DataFrame:
+        """
+        Validate that origin and destination airports are different.
+        Flags records where origin == dest (case-insensitive),
+        including empty strings and NaN pairs.
+
+        Returns:
+            DataFrame of rows where origin and destination are the same
+        """
+        if 'origin' not in self.df.columns or 'dest' not in self.df.columns:
+            return pd.DataFrame()
+
+        origin = self.df['origin'].fillna('').str.upper()
+        dest = self.df['dest'].fillna('').str.upper()
+
+        invalid_mask = origin == dest
+        return self.df[invalid_mask]
+
     def validate_distance_positive(self) -> pd.DataFrame:
         """
         Validate that all distances are positive
@@ -284,7 +302,8 @@ class DataQualityReport:
             'invalid_airport_codes': len(self.validator.validate_airport_codes()),
             'invalid_dates': len(self.validator.validate_dates()),
             'invalid_delay_logic': len(self.validator.validate_delay_logic()),
-            'invalid_distances': len(self.validator.validate_distance_positive())
+            'invalid_distances': len(self.validator.validate_distance_positive()),
+            'same_origin_destination': len(self.validator.validate_origin_destination_different())
         }
         
         return report
