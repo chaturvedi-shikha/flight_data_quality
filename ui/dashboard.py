@@ -331,7 +331,11 @@ def display_route_validation(report: dict, df: pd.DataFrame):
 
     # Color-code severity in the table
     def severity_color(val):
-        colors = {"High": "background-color: #ffcccc", "Medium": "background-color: #fff3cd", "Low": "background-color: #cce5ff"}
+        colors = {
+            "High": "background-color: #ffcccc",
+            "Medium": "background-color: #fff3cd",
+            "Low": "background-color: #cce5ff",
+        }
         return colors.get(val, "")
 
     st.dataframe(

@@ -340,32 +340,44 @@ class DataQualityReport:
         # Same airport violations (High severity)
         same_airport = self.validator.validate_origin_destination_different()
         for _, row in same_airport.iterrows():
-            rows.append({
-                "flight_date": row.get("fl_date", ""),
-                "carrier": row.get("op_unique_carrier", ""),
-                "origin": row.get("origin", ""),
-                "dest": row.get("dest", ""),
-                "issue_type": "Same Airport",
-                "severity": "High",
-                "details": f"Origin and destination are the same: {row.get('origin', '')}",
-            })
+            rows.append(
+                {
+                    "flight_date": row.get("fl_date", ""),
+                    "carrier": row.get("op_unique_carrier", ""),
+                    "origin": row.get("origin", ""),
+                    "dest": row.get("dest", ""),
+                    "issue_type": "Same Airport",
+                    "severity": "High",
+                    "details": f"Origin and destination are the same: {row.get('origin', '')}",
+                }
+            )
 
         # Distance mismatches (Medium severity)
         distance_mismatches = self.validator.validate_distance_geodesic()
         for _, row in distance_mismatches.iterrows():
             expected = row.get("expected_distance", 0)
             actual = row.get("actual_distance", 0)
-            rows.append({
-                "flight_date": row.get("fl_date", ""),
-                "carrier": row.get("op_unique_carrier", ""),
-                "origin": row.get("origin", ""),
-                "dest": row.get("dest", ""),
-                "issue_type": "Distance Mismatch",
-                "severity": "Medium",
-                "details": f"Expected: {expected:.0f} mi, Actual: {actual:.0f} mi",
-            })
+            rows.append(
+                {
+                    "flight_date": row.get("fl_date", ""),
+                    "carrier": row.get("op_unique_carrier", ""),
+                    "origin": row.get("origin", ""),
+                    "dest": row.get("dest", ""),
+                    "issue_type": "Distance Mismatch",
+                    "severity": "Medium",
+                    "details": f"Expected: {expected:.0f} mi, Actual: {actual:.0f} mi",
+                }
+            )
 
-        columns = ["flight_date", "carrier", "origin", "dest", "issue_type", "severity", "details"]
+        columns = [
+            "flight_date",
+            "carrier",
+            "origin",
+            "dest",
+            "issue_type",
+            "severity",
+            "details",
+        ]
         if not rows:
             return pd.DataFrame(columns=columns)
         return pd.DataFrame(rows, columns=columns)

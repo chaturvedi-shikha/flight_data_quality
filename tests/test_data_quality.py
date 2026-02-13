@@ -451,7 +451,15 @@ class TestRouteValidationDetails:
         details = report.generate_route_validation_details()
 
         assert isinstance(details, pd.DataFrame)
-        expected_cols = {"flight_date", "carrier", "origin", "dest", "issue_type", "severity", "details"}
+        expected_cols = {
+            "flight_date",
+            "carrier",
+            "origin",
+            "dest",
+            "issue_type",
+            "severity",
+            "details",
+        }
         assert expected_cols.issubset(set(details.columns))
 
     def test_same_airport_flagged_as_high_severity(self):
