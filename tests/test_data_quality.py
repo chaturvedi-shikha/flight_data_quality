@@ -430,11 +430,10 @@ class TestDataQualityReport:
 class TestRouteValidationDetails:
     """Test suite for route validation detail generation"""
 
-    def test_generate_route_validation_details_structure(self):
-        """Test that route validation details returns expected structure"""
-        from src.data_quality import DataQualityReport
-
-        data = pd.DataFrame(
+    @pytest.fixture
+    def data_with_same_airport(self):
+        """Provides a DataFrame with a same-airport issue."""
+        return pd.DataFrame(
             {
                 "fl_date": ["2024-01-01", "2024-01-02"],
                 "op_unique_carrier": ["AA", "DL"],
@@ -447,7 +446,27 @@ class TestRouteValidationDetails:
             }
         )
 
-        report = DataQualityReport(data)
+    @pytest.fixture
+    def valid_flight_data(self):
+        """Provides a DataFrame with no route validation issues."""
+        return pd.DataFrame(
+            {
+                "fl_date": ["2024-01-01"],
+                "op_unique_carrier": ["AA"],
+                "origin": ["JFK"],
+                "dest": ["LAX"],
+                "dep_delay": [10.0],
+                "arr_delay": [15.0],
+                "cancelled": [0],
+                "distance": [2475.0],
+            }
+        )
+
+    def test_generate_route_validation_details_structure(self, data_with_same_airport):
+        """Test that route validation details returns expected structure"""
+        from src.data_quality import DataQualityReport
+
+        report = DataQualityReport(data_with_same_airport)
         details = report.generate_route_validation_details()
 
         assert isinstance(details, pd.DataFrame)
@@ -462,24 +481,11 @@ class TestRouteValidationDetails:
         }
         assert expected_cols.issubset(set(details.columns))
 
-    def test_same_airport_flagged_as_high_severity(self):
+    def test_same_airport_flagged_as_high_severity(self, data_with_same_airport):
         """Test that same-airport violations are flagged with high severity"""
         from src.data_quality import DataQualityReport
 
-        data = pd.DataFrame(
-            {
-                "fl_date": ["2024-01-01", "2024-01-02"],
-                "op_unique_carrier": ["AA", "DL"],
-                "origin": ["JFK", "LAX"],
-                "dest": ["JFK", "SFO"],
-                "dep_delay": [10.0, -5.0],
-                "arr_delay": [15.0, -3.0],
-                "cancelled": [0, 0],
-                "distance": [2475.0, 350.0],
-            }
-        )
-
-        report = DataQualityReport(data)
+        report = DataQualityReport(data_with_same_airport)
         details = report.generate_route_validation_details()
 
         same_airport = details[details["issue_type"] == "Same Airport"]
@@ -515,46 +521,20 @@ class TestRouteValidationDetails:
         assert len(distance_issues) == 1
         assert distance_issues.iloc[0]["severity"] == "Medium"
 
-    def test_no_issues_returns_empty_dataframe(self):
+    def test_no_issues_returns_empty_dataframe(self, valid_flight_data):
         """Test that valid data returns empty DataFrame"""
         from src.data_quality import DataQualityReport
 
-        data = pd.DataFrame(
-            {
-                "fl_date": ["2024-01-01"],
-                "op_unique_carrier": ["AA"],
-                "origin": ["JFK"],
-                "dest": ["LAX"],
-                "dep_delay": [10.0],
-                "arr_delay": [15.0],
-                "cancelled": [0],
-                "distance": [2475.0],
-            }
-        )
-
-        report = DataQualityReport(data)
+        report = DataQualityReport(valid_flight_data)
         details = report.generate_route_validation_details()
 
         assert len(details) == 0
 
-    def test_report_includes_route_validation_details(self):
+    def test_report_includes_route_validation_details(self, valid_flight_data):
         """Test that generate() report includes route_validation_details key"""
         from src.data_quality import DataQualityReport
 
-        data = pd.DataFrame(
-            {
-                "fl_date": ["2024-01-01"],
-                "op_unique_carrier": ["AA"],
-                "origin": ["JFK"],
-                "dest": ["LAX"],
-                "dep_delay": [10.0],
-                "arr_delay": [15.0],
-                "cancelled": [0],
-                "distance": [2475.0],
-            }
-        )
-
-        report = DataQualityReport(data)
+        report = DataQualityReport(valid_flight_data)
         report_dict = report.generate()
 
         assert "route_validation_details" in report_dict

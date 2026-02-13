@@ -14,6 +14,24 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from data_quality import DataQualityChecker, FlightDataValidator, DataQualityReport
 
+# Centralized color definitions for severity and issue types
+SEVERITY_COLORS = {
+    "High": "#EF553B",
+    "Medium": "#FECB52",
+    "Low": "#636EFA",
+}
+
+SEVERITY_BG_COLORS = {
+    "High": "background-color: #ffcccc",
+    "Medium": "background-color: #fff3cd",
+    "Low": "background-color: #cce5ff",
+}
+
+ISSUE_TYPE_COLORS = {
+    "Same Airport": SEVERITY_COLORS["High"],
+    "Distance Mismatch": SEVERITY_COLORS["Medium"],
+}
+
 
 # Page configuration
 st.set_page_config(
@@ -295,10 +313,7 @@ def display_route_validation(report: dict, df: pd.DataFrame):
             y="Count",
             title="Issues by Type",
             color="Issue Type",
-            color_discrete_map={
-                "Same Airport": "#EF553B",
-                "Distance Mismatch": "#FECB52",
-            },
+            color_discrete_map=ISSUE_TYPE_COLORS,
         )
         st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -312,11 +327,7 @@ def display_route_validation(report: dict, df: pd.DataFrame):
             names="Severity",
             title="Severity Distribution",
             color="Severity",
-            color_discrete_map={
-                "High": "#EF553B",
-                "Medium": "#FECB52",
-                "Low": "#636EFA",
-            },
+            color_discrete_map=SEVERITY_COLORS,
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
@@ -331,15 +342,10 @@ def display_route_validation(report: dict, df: pd.DataFrame):
 
     # Color-code severity in the table
     def severity_color(val):
-        colors = {
-            "High": "background-color: #ffcccc",
-            "Medium": "background-color: #fff3cd",
-            "Low": "background-color: #cce5ff",
-        }
-        return colors.get(val, "")
+        return SEVERITY_BG_COLORS.get(val, "")
 
     st.dataframe(
-        filtered_df.style.applymap(severity_color, subset=["severity"]),
+        filtered_df.style.map(severity_color, subset=["severity"]),
         use_container_width=True,
     )
 
