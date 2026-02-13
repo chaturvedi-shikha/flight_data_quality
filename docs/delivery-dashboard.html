@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delivery Dashboard - Flight Data Quality</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #1a1a2e; padding: 24px; }
+        h1 { font-size: 24px; margin-bottom: 4px; }
+        .subtitle { color: #666; margin-bottom: 24px; font-size: 14px; }
+        .subtitle a { color: #0969da; text-decoration: none; }
+        .subtitle a:hover { text-decoration: underline; }
+
+        .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+        .card { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); text-align: center; }
+        .card .value { font-size: 48px; font-weight: 700; }
+        .card .label { font-size: 14px; color: #666; margin-top: 4px; }
+        .card.open .value { color: #da3633; }
+        .card.closed .value { color: #1a7f37; }
+        .card.total .value { color: #0969da; }
+        .card.time .value { color: #8250df; font-size: 36px; }
+
+        .section { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 24px; }
+        .section h2 { font-size: 18px; margin-bottom: 16px; }
+
+        .chart-container { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+        .donut-chart { position: relative; width: 180px; height: 180px; }
+        .donut-chart svg { transform: rotate(-90deg); }
+        .donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+        .donut-center .pct { font-size: 32px; font-weight: 700; color: #1a7f37; }
+        .donut-center .lbl { font-size: 12px; color: #666; }
+        .legend { display: flex; flex-direction: column; gap: 8px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid #e8e8e8; font-size: 14px; }
+        th { font-weight: 600; color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #f8f9fa; }
+
+        .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .badge.open { background: #fff1f0; color: #da3633; }
+        .badge.closed { background: #dafbe1; color: #1a7f37; }
+
+        .bar-container { display: flex; align-items: center; gap: 8px; }
+        .bar-bg { flex: 1; height: 8px; background: #e8e8e8; border-radius: 4px; overflow: hidden; max-width: 120px; }
+        .bar-fill { height: 100%; border-radius: 4px; background: #8250df; }
+        .bar-label { font-size: 13px; color: #666; white-space: nowrap; }
+
+        .gh-link { display: inline-flex; align-items: center; gap: 6px; background: #24292f; color: #fff; padding: 8px 16px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 500; margin-top: 16px; }
+        .gh-link:hover { background: #32383f; }
+        .gh-link svg { fill: #fff; }
+
+        .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+        .filter-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid #d0d7de; background: #fff; cursor: pointer; font-size: 13px; transition: all 0.2s; }
+        .filter-btn:hover { background: #f3f4f6; }
+        .filter-btn.active { background: #0969da; color: #fff; border-color: #0969da; }
+
+        .timestamp { text-align: center; color: #999; font-size: 12px; margin-top: 16px; }
+    </style>
+</head>
+<body>
+
+<h1>Delivery Dashboard</h1>
+<p class="subtitle">
+    Flight Data Quality &mdash;
+    <a href="https://github.com/chaturvedi-shikha/flight_data_quality" target="_blank">chaturvedi-shikha/flight_data_quality</a>
+</p>
+
+<div class="cards">
+    <div class="card total">
+        <div class="value">4</div>
+        <div class="label">Total Issues</div>
+    </div>
+    <div class="card closed">
+        <div class="value">2</div>
+        <div class="label">Closed</div>
+    </div>
+    <div class="card open">
+        <div class="value">2</div>
+        <div class="label">Open</div>
+    </div>
+    <div class="card time">
+        <div class="value">9.4h</div>
+        <div class="label">Avg Time to Close</div>
+    </div>
+</div>
+
+<div class="section">
+    <h2>Completion Progress</h2>
+    <div class="chart-container">
+        <div class="donut-chart">
+            <svg width="180" height="180" viewBox="0 0 180 180">
+                <circle cx="90" cy="90" r="70" fill="none" stroke="#e8e8e8" stroke-width="20"/>
+                <circle cx="90" cy="90" r="70" fill="none" stroke="#1a7f37" stroke-width="20"
+                    stroke-dasharray="220 440" stroke-linecap="round"/>
+            </svg>
+            <div class="donut-center">
+                <div class="pct">50%</div>
+                <div class="lbl">Complete</div>
+            </div>
+        </div>
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#1a7f37"></div> Closed (2)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#da3633"></div> Open (2)</div>
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2>Issue Details</h2>
+    <div class="filter-bar">
+        <button class="filter-btn active" onclick="filterIssues('all', this)">All (4)</button>
+        <button class="filter-btn" onclick="filterIssues('open', this)">Open (2)</button>
+        <button class="filter-btn" onclick="filterIssues('closed', this)">Closed (2)</button>
+    </div>
+    <table id="issueTable">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Time to Close</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr data-state="closed">
+                <td><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/1" target="_blank">#1</a></td>
+                <td>STORY-001: Add same origin-destination route validation</td>
+                <td><span class="badge closed">Closed</span></td>
+                <td>Feb 12, 2026</td>
+                <td>
+                    <div class="bar-container">
+                        <div class="bar-bg"><div class="bar-fill" style="width:97%"></div></div>
+                        <span class="bar-label">9.3h</span>
+                    </div>
+                </td>
+            </tr>
+            <tr data-state="closed">
+                <td><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/2" target="_blank">#2</a></td>
+                <td>STORY-002: Add route distance validation using Haversine formula</td>
+                <td><span class="badge closed">Closed</span></td>
+                <td>Feb 12, 2026</td>
+                <td>
+                    <div class="bar-container">
+                        <div class="bar-bg"><div class="bar-fill" style="width:100%"></div></div>
+                        <span class="bar-label">9.6h</span>
+                    </div>
+                </td>
+            </tr>
+            <tr data-state="open">
+                <td><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/3" target="_blank">#3</a></td>
+                <td>STORY-003: Add suspicious route detection with severity levels</td>
+                <td><span class="badge open">Open</span></td>
+                <td>Feb 12, 2026</td>
+                <td><span style="color:#999">&#8212;</span></td>
+            </tr>
+            <tr data-state="open">
+                <td><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/4" target="_blank">#4</a></td>
+                <td>STORY-004: Add route validation dashboard visualization</td>
+                <td><span class="badge open">Open</span></td>
+                <td>Feb 12, 2026</td>
+                <td><span style="color:#999">&#8212;</span></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div style="text-align:center; margin-top:24px;">
+    <a class="gh-link" href="https://github.com/chaturvedi-shikha/flight_data_quality/issues" target="_blank">
+        <svg height="16" width="16" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+        View on GitHub
+    </a>
+</div>
+
+<p class="timestamp">Generated: February 13, 2026</p>
+
+<script>
+function filterIssues(state, btn) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('#issueTable tbody tr').forEach(row => {
+        if (state === 'all' || row.dataset.state === state) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+</script>
+
+</body>
+</html>
