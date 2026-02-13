@@ -238,6 +238,117 @@ def display_validations(report: dict, df: pd.DataFrame):
     st.plotly_chart(fig, use_container_width=True)
 
 
+def display_route_validation(report: dict, df: pd.DataFrame):
+    """Display route validation results section"""
+    st.header("🛤️ Route Validation Results")
+
+    validations = report["validations"]
+    route_details = report.get("route_validation_details", [])
+
+    # Summary cards
+    col1, col2, col3 = st.columns(3)
+
+    same_airport_count = validations.get("same_origin_destination", 0)
+    distance_mismatch_count = validations.get("distance_mismatches", 0)
+    total_flagged = same_airport_count + distance_mismatch_count
+
+    with col1:
+        st.metric(
+            "Same Airport Issues",
+            same_airport_count,
+            delta="Issues found" if same_airport_count > 0 else None,
+            delta_color="inverse",
+        )
+
+    with col2:
+        st.metric(
+            "Distance Mismatches",
+            distance_mismatch_count,
+            delta="Issues found" if distance_mismatch_count > 0 else None,
+            delta_color="inverse",
+        )
+
+    with col3:
+        st.metric(
+            "Total Flagged Routes",
+            total_flagged,
+            delta="Issues found" if total_flagged > 0 else None,
+            delta_color="inverse",
+        )
+
+    if not route_details:
+        st.success("No route validation issues found!")
+        return
+
+    details_df = pd.DataFrame(route_details)
+
+    # Visualizations
+    viz_col1, viz_col2 = st.columns(2)
+
+    with viz_col1:
+        # Bar chart: Issues by type
+        type_counts = details_df["issue_type"].value_counts().reset_index()
+        type_counts.columns = ["Issue Type", "Count"]
+        fig_bar = px.bar(
+            type_counts,
+            x="Issue Type",
+            y="Count",
+            title="Issues by Type",
+            color="Issue Type",
+            color_discrete_map={
+                "Same Airport": "#EF553B",
+                "Distance Mismatch": "#FECB52",
+            },
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    with viz_col2:
+        # Pie chart: Severity distribution
+        severity_counts = details_df["severity"].value_counts().reset_index()
+        severity_counts.columns = ["Severity", "Count"]
+        fig_pie = px.pie(
+            severity_counts,
+            values="Count",
+            names="Severity",
+            title="Severity Distribution",
+            color="Severity",
+            color_discrete_map={
+                "High": "#EF553B",
+                "Medium": "#FECB52",
+                "Low": "#636EFA",
+            },
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+    # Filter by issue type
+    st.subheader("Flagged Routes")
+    issue_types = ["All"] + sorted(details_df["issue_type"].unique().tolist())
+    selected_type = st.selectbox("Filter by validation type", issue_types)
+
+    filtered_df = details_df
+    if selected_type != "All":
+        filtered_df = details_df[details_df["issue_type"] == selected_type]
+
+    # Color-code severity in the table
+    def severity_color(val):
+        colors = {"High": "background-color: #ffcccc", "Medium": "background-color: #fff3cd", "Low": "background-color: #cce5ff"}
+        return colors.get(val, "")
+
+    st.dataframe(
+        filtered_df.style.applymap(severity_color, subset=["severity"]),
+        use_container_width=True,
+    )
+
+    # CSV export
+    csv_data = filtered_df.to_csv(index=False)
+    st.download_button(
+        label="📥 Export Flagged Routes to CSV",
+        data=csv_data,
+        file_name="flagged_routes.csv",
+        mime="text/csv",
+    )
+
+
 def display_flight_insights(df: pd.DataFrame):
     """Display flight-specific insights"""
     st.header("✈️ Flight Insights")
@@ -354,6 +465,9 @@ def main():
         st.markdown("---")
 
         display_validations(report, df)
+        st.markdown("---")
+
+        display_route_validation(report, df)
         st.markdown("---")
 
         display_statistics(report)

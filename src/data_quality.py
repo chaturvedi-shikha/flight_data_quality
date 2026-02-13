@@ -327,6 +327,49 @@ class DataQualityReport:
             "column_list": list(self.df.columns),
         }
 
+    def generate_route_validation_details(self) -> pd.DataFrame:
+        """
+        Generate detailed route validation results with issue type and severity.
+
+        Returns:
+            DataFrame with columns: flight_date, carrier, origin, dest,
+            issue_type, severity, details
+        """
+        rows = []
+
+        # Same airport violations (High severity)
+        same_airport = self.validator.validate_origin_destination_different()
+        for _, row in same_airport.iterrows():
+            rows.append({
+                "flight_date": row.get("fl_date", ""),
+                "carrier": row.get("op_unique_carrier", ""),
+                "origin": row.get("origin", ""),
+                "dest": row.get("dest", ""),
+                "issue_type": "Same Airport",
+                "severity": "High",
+                "details": f"Origin and destination are the same: {row.get('origin', '')}",
+            })
+
+        # Distance mismatches (Medium severity)
+        distance_mismatches = self.validator.validate_distance_geodesic()
+        for _, row in distance_mismatches.iterrows():
+            expected = row.get("expected_distance", 0)
+            actual = row.get("actual_distance", 0)
+            rows.append({
+                "flight_date": row.get("fl_date", ""),
+                "carrier": row.get("op_unique_carrier", ""),
+                "origin": row.get("origin", ""),
+                "dest": row.get("dest", ""),
+                "issue_type": "Distance Mismatch",
+                "severity": "Medium",
+                "details": f"Expected: {expected:.0f} mi, Actual: {actual:.0f} mi",
+            })
+
+        columns = ["flight_date", "carrier", "origin", "dest", "issue_type", "severity", "details"]
+        if not rows:
+            return pd.DataFrame(columns=columns)
+        return pd.DataFrame(rows, columns=columns)
+
     def generate(self) -> Dict[str, Any]:
         """
         Generate complete data quality report
@@ -369,6 +412,10 @@ class DataQualityReport:
             ),
             "distance_mismatches": len(self.validator.validate_distance_geodesic()),
         }
+
+        # Add detailed route validation results
+        route_details = self.generate_route_validation_details()
+        report["route_validation_details"] = route_details.to_dict(orient="records")
 
         return report
 
