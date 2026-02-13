@@ -427,6 +427,119 @@ class TestDataQualityReport:
         assert "Data Quality Report" in html_content
 
 
+class TestRouteValidationDetails:
+    """Test suite for route validation detail generation"""
+
+    @pytest.fixture
+    def data_with_same_airport(self):
+        """Provides a DataFrame with a same-airport issue."""
+        return pd.DataFrame(
+            {
+                "fl_date": ["2024-01-01", "2024-01-02"],
+                "op_unique_carrier": ["AA", "DL"],
+                "origin": ["JFK", "LAX"],
+                "dest": ["JFK", "SFO"],
+                "dep_delay": [10.0, -5.0],
+                "arr_delay": [15.0, -3.0],
+                "cancelled": [0, 0],
+                "distance": [2475.0, 350.0],
+            }
+        )
+
+    @pytest.fixture
+    def valid_flight_data(self):
+        """Provides a DataFrame with no route validation issues."""
+        return pd.DataFrame(
+            {
+                "fl_date": ["2024-01-01"],
+                "op_unique_carrier": ["AA"],
+                "origin": ["JFK"],
+                "dest": ["LAX"],
+                "dep_delay": [10.0],
+                "arr_delay": [15.0],
+                "cancelled": [0],
+                "distance": [2475.0],
+            }
+        )
+
+    def test_generate_route_validation_details_structure(self, data_with_same_airport):
+        """Test that route validation details returns expected structure"""
+        from src.data_quality import DataQualityReport
+
+        report = DataQualityReport(data_with_same_airport)
+        details = report.generate_route_validation_details()
+
+        assert isinstance(details, pd.DataFrame)
+        expected_cols = {
+            "flight_date",
+            "carrier",
+            "origin",
+            "dest",
+            "issue_type",
+            "severity",
+            "details",
+        }
+        assert expected_cols.issubset(set(details.columns))
+
+    def test_same_airport_flagged_as_high_severity(self, data_with_same_airport):
+        """Test that same-airport violations are flagged with high severity"""
+        from src.data_quality import DataQualityReport
+
+        report = DataQualityReport(data_with_same_airport)
+        details = report.generate_route_validation_details()
+
+        same_airport = details[details["issue_type"] == "Same Airport"]
+        assert len(same_airport) == 1
+        assert same_airport.iloc[0]["severity"] == "High"
+        assert same_airport.iloc[0]["origin"] == "JFK"
+
+    def test_distance_mismatch_flagged_as_medium_severity(self):
+        """Test that distance mismatches are flagged with medium severity"""
+        from src.data_quality import DataQualityReport
+
+        data = pd.DataFrame(
+            {
+                "fl_date": ["2024-01-01"],
+                "op_unique_carrier": ["AA"],
+                "origin": ["JFK"],
+                "dest": ["LAX"],
+                "origin_lat": [40.6413],
+                "origin_lon": [-73.7781],
+                "dest_lat": [33.9425],
+                "dest_lon": [-118.4081],
+                "dep_delay": [10.0],
+                "arr_delay": [15.0],
+                "cancelled": [0],
+                "distance": [5000.0],  # Way off from ~2475
+            }
+        )
+
+        report = DataQualityReport(data)
+        details = report.generate_route_validation_details()
+
+        distance_issues = details[details["issue_type"] == "Distance Mismatch"]
+        assert len(distance_issues) == 1
+        assert distance_issues.iloc[0]["severity"] == "Medium"
+
+    def test_no_issues_returns_empty_dataframe(self, valid_flight_data):
+        """Test that valid data returns empty DataFrame"""
+        from src.data_quality import DataQualityReport
+
+        report = DataQualityReport(valid_flight_data)
+        details = report.generate_route_validation_details()
+
+        assert len(details) == 0
+
+    def test_report_includes_route_validation_details(self, valid_flight_data):
+        """Test that generate() report includes route_validation_details key"""
+        from src.data_quality import DataQualityReport
+
+        report = DataQualityReport(valid_flight_data)
+        report_dict = report.generate()
+
+        assert "route_validation_details" in report_dict
+
+
 class TestIntegration:
     """Integration tests for complete workflow"""
 

@@ -327,6 +327,72 @@ class DataQualityReport:
             "column_list": list(self.df.columns),
         }
 
+    def generate_route_validation_details(
+        self,
+        same_airport: Optional[pd.DataFrame] = None,
+        distance_mismatches: Optional[pd.DataFrame] = None,
+    ) -> pd.DataFrame:
+        """
+        Generate detailed route validation results with issue type and severity.
+
+        Args:
+            same_airport: Pre-computed same-airport violations. If None, runs validation.
+            distance_mismatches: Pre-computed distance mismatches. If None, runs validation.
+
+        Returns:
+            DataFrame with columns: flight_date, carrier, origin, dest,
+            issue_type, severity, details
+        """
+        rows = []
+
+        if same_airport is None:
+            same_airport = self.validator.validate_origin_destination_different()
+        if distance_mismatches is None:
+            distance_mismatches = self.validator.validate_distance_geodesic()
+
+        # Same airport violations (High severity)
+        for _, row in same_airport.iterrows():
+            rows.append(
+                {
+                    "flight_date": row.get("fl_date", ""),
+                    "carrier": row.get("op_unique_carrier", ""),
+                    "origin": row.get("origin", ""),
+                    "dest": row.get("dest", ""),
+                    "issue_type": "Same Airport",
+                    "severity": "High",
+                    "details": f"Origin and destination are the same: {row.get('origin', '')}",
+                }
+            )
+
+        # Distance mismatches (Medium severity)
+        for _, row in distance_mismatches.iterrows():
+            expected = row.get("expected_distance", 0)
+            actual = row.get("actual_distance", 0)
+            rows.append(
+                {
+                    "flight_date": row.get("fl_date", ""),
+                    "carrier": row.get("op_unique_carrier", ""),
+                    "origin": row.get("origin", ""),
+                    "dest": row.get("dest", ""),
+                    "issue_type": "Distance Mismatch",
+                    "severity": "Medium",
+                    "details": f"Expected: {expected:.0f} mi, Actual: {actual:.0f} mi",
+                }
+            )
+
+        columns = [
+            "flight_date",
+            "carrier",
+            "origin",
+            "dest",
+            "issue_type",
+            "severity",
+            "details",
+        ]
+        if not rows:
+            return pd.DataFrame(columns=columns)
+        return pd.DataFrame(rows, columns=columns)
+
     def generate(self) -> Dict[str, Any]:
         """
         Generate complete data quality report
@@ -357,18 +423,26 @@ class DataQualityReport:
             except Exception as e:
                 stats[col] = {"error": str(e)}  # type: ignore[index]
 
-        # Run flight-specific validations
+        # Run flight-specific validations (compute once, reuse for details)
+        same_origin_dest_df = self.validator.validate_origin_destination_different()
+        distance_mismatches_df = self.validator.validate_distance_geodesic()
+
         report["validations"] = {
             "invalid_carrier_codes": len(self.validator.validate_carrier_codes()),
             "invalid_airport_codes": len(self.validator.validate_airport_codes()),
             "invalid_dates": len(self.validator.validate_dates()),
             "invalid_delay_logic": len(self.validator.validate_delay_logic()),
             "invalid_distances": len(self.validator.validate_distance_positive()),
-            "same_origin_destination": len(
-                self.validator.validate_origin_destination_different()
-            ),
-            "distance_mismatches": len(self.validator.validate_distance_geodesic()),
+            "same_origin_destination": len(same_origin_dest_df),
+            "distance_mismatches": len(distance_mismatches_df),
         }
+
+        # Add detailed route validation results (reuse pre-computed DataFrames)
+        route_details = self.generate_route_validation_details(
+            same_airport=same_origin_dest_df,
+            distance_mismatches=distance_mismatches_df,
+        )
+        report["route_validation_details"] = route_details.to_dict(orient="records")
 
         return report
 
