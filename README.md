@@ -1,5 +1,7 @@
 # Flight Data Quality Analysis
 
+[![CI](https://github.com/chaturvedi-shikha/flight_data_quality/actions/workflows/ci.yml/badge.svg)](https://github.com/chaturvedi-shikha/flight_data_quality/actions/workflows/ci.yml)
+
 A comprehensive data quality analysis tool for flight data with TDD (Test-Driven Development) approach and interactive UI dashboard.
 
 ## Features

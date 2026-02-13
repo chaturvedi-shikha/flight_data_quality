@@ -15,7 +15,7 @@ pytest-mock==3.12.0
 # UI Dashboard
 streamlit==1.29.0
 plotly==5.18.0
-altair==5.2.0
+altair==4.2.2
 
 # Reporting
 jinja2==3.1.2
