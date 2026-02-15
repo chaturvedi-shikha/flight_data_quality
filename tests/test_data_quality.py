@@ -540,6 +540,143 @@ class TestRouteValidationDetails:
         assert "route_validation_details" in report_dict
 
 
+class TestDetectDatasetType:
+    """Test suite for dataset type detection"""
+
+    def test_detect_booking_data(self):
+        """Test detection of booking dataset"""
+        from src.data_quality import detect_dataset_type
+
+        df = pd.DataFrame(
+            {
+                "num_passengers": [1, 2],
+                "sales_channel": ["Internet", "Mobile"],
+                "trip_type": ["RoundTrip", "OneWay"],
+                "booking_complete": [1, 0],
+                "booking_origin": ["US", "UK"],
+            }
+        )
+        assert detect_dataset_type(df) == "booking"
+
+    def test_detect_flight_data(self):
+        """Test detection of flight dataset"""
+        from src.data_quality import detect_dataset_type
+
+        df = pd.DataFrame(
+            {
+                "op_unique_carrier": ["AA"],
+                "origin": ["JFK"],
+                "dest": ["LAX"],
+                "fl_date": ["2024-01-01"],
+            }
+        )
+        assert detect_dataset_type(df) == "flight"
+
+    def test_detect_unknown_defaults_to_flight(self):
+        """Test that unknown columns default to flight"""
+        from src.data_quality import detect_dataset_type
+
+        df = pd.DataFrame({"col_a": [1], "col_b": [2]})
+        assert detect_dataset_type(df) == "flight"
+
+
+class TestCustomerBookingValidator:
+    """Test suite for customer booking validations"""
+
+    def test_validate_booking_origin_detects_not_set(self):
+        """Test that (not set) values are flagged"""
+        from src.data_quality import CustomerBookingValidator
+
+        df = pd.DataFrame(
+            {
+                "booking_origin": ["US", "(not set)", "UK", "(not set)", "AU"],
+            }
+        )
+        validator = CustomerBookingValidator(df)
+        result = validator.validate_booking_origin()
+        assert len(result) == 2
+
+    def test_validate_booking_origin_no_issues(self):
+        """Test that valid origins return empty DataFrame"""
+        from src.data_quality import CustomerBookingValidator
+
+        df = pd.DataFrame({"booking_origin": ["US", "UK", "AU"]})
+        validator = CustomerBookingValidator(df)
+        result = validator.validate_booking_origin()
+        assert len(result) == 0
+
+    def test_validate_booking_origin_missing_column(self):
+        """Test graceful handling when column is missing"""
+        from src.data_quality import CustomerBookingValidator
+
+        df = pd.DataFrame({"other_col": [1, 2]})
+        validator = CustomerBookingValidator(df)
+        result = validator.validate_booking_origin()
+        assert len(result) == 0
+
+
+class TestBookingDataQualityReport:
+    """Test suite for booking data quality reporting"""
+
+    @pytest.fixture
+    def sample_booking_data(self):
+        return pd.DataFrame(
+            {
+                "num_passengers": [1, 2, 1, 1, 2],
+                "sales_channel": ["Internet", "Internet", "Mobile", "Internet", "Internet"],
+                "trip_type": ["RoundTrip", "OneWay", "RoundTrip", "OneWay", "RoundTrip"],
+                "booking_complete": [1, 0, 0, 1, 0],
+                "booking_origin": ["US", "(not set)", "UK", "AU", "US"],
+                "length_of_stay": [5, 3, 7, 2, 5],
+            }
+        )
+
+    def test_report_structure(self, sample_booking_data):
+        """Test that report contains all expected keys"""
+        from src.data_quality import BookingDataQualityReport
+
+        report_gen = BookingDataQualityReport(sample_booking_data)
+        report = report_gen.generate()
+
+        assert report["dataset_type"] == "booking"
+        assert "overview" in report
+        assert "null_analysis" in report
+        assert "duplicates" in report
+        assert "statistics" in report
+        assert "not_set_booking_origin" in report
+
+    def test_completion_rate(self, sample_booking_data):
+        """Test that completion rate is calculated correctly"""
+        from src.data_quality import BookingDataQualityReport
+
+        report_gen = BookingDataQualityReport(sample_booking_data)
+        report = report_gen.generate()
+
+        # 2 out of 5 completed = 40%
+        assert report["overview"]["completion_rate"] == 40.0
+
+    def test_not_set_count(self, sample_booking_data):
+        """Test that (not set) booking_origin count is correct"""
+        from src.data_quality import BookingDataQualityReport
+
+        report_gen = BookingDataQualityReport(sample_booking_data)
+        report = report_gen.generate()
+
+        assert report["not_set_booking_origin"] == 1
+
+    def test_overview_metrics(self, sample_booking_data):
+        """Test overview section metrics"""
+        from src.data_quality import BookingDataQualityReport
+
+        report_gen = BookingDataQualityReport(sample_booking_data)
+        report = report_gen.generate()
+
+        assert report["overview"]["total_rows"] == 5
+        assert report["overview"]["total_columns"] == 6
+        assert "memory_usage" in report["overview"]
+        assert "duplicate_count" in report["overview"]
+
+
 class TestIntegration:
     """Integration tests for complete workflow"""
 

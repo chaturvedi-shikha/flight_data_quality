@@ -12,7 +12,13 @@ import sys
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from data_quality import DataQualityChecker, FlightDataValidator, DataQualityReport
+from data_quality import (
+    DataQualityChecker,
+    FlightDataValidator,
+    DataQualityReport,
+    BookingDataQualityReport,
+    detect_dataset_type,
+)
 
 # Centralized color definitions for severity and issue types
 SEVERITY_COLORS = {
@@ -419,9 +425,54 @@ def display_flight_insights(df: pd.DataFrame):
         st.plotly_chart(fig, use_container_width=True)
 
 
+def display_booking_overview(df: pd.DataFrame, report: dict):
+    """Display overview section for booking data"""
+    st.header("📊 Booking Data Overview")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric(
+            "Total Bookings",
+            f"{report['overview']['total_rows']:,}",
+            help="Total number of booking records",
+        )
+
+    with col2:
+        st.metric(
+            "Completion Rate",
+            f"{report['overview']['completion_rate']}%",
+            help="Percentage of bookings completed",
+        )
+
+    with col3:
+        st.metric(
+            "Duplicates",
+            f"{report['overview']['duplicate_count']:,}",
+            help="Number of duplicate records",
+        )
+
+    with col4:
+        st.metric(
+            "Total Columns",
+            report["overview"]["total_columns"],
+            help="Number of data attributes",
+        )
+
+
+def display_booking_null_note(report: dict):
+    """Display additional note about (not set) values in booking_origin"""
+    not_set_count = report.get("not_set_booking_origin", 0)
+    if not_set_count > 0:
+        st.subheader("Pseudo-Missing Data")
+        st.warning(
+            f'**booking_origin** contains {not_set_count:,} records with value '
+            f'"(not set)", which may represent missing data.'
+        )
+
+
 def main():
     """Main dashboard application"""
-    st.title("✈️ Flight Data Quality Dashboard")
     st.markdown("---")
 
     # Sidebar
@@ -430,9 +481,9 @@ def main():
 
         # File upload or use default
         uploaded_file = st.file_uploader(
-            "Upload flight data CSV",
+            "Upload CSV data",
             type=["csv"],
-            help="Upload your flight data CSV file",
+            help="Upload a flight or customer booking CSV file",
         )
 
         if uploaded_file is None:
@@ -462,60 +513,108 @@ def main():
     try:
         with st.spinner("Loading data and generating quality report..."):
             df = load_data(file_path)
+            dataset_type = detect_dataset_type(df)
 
-            # Generate report
-            report_gen = DataQualityReport(df)
-            report = report_gen.generate()
+        if dataset_type == "booking":
+            st.title("📋 Customer Booking Data Quality Dashboard")
 
-        # Display sections
-        display_overview(df, report)
-        st.markdown("---")
+            with st.spinner("Generating booking quality report..."):
+                report_gen = BookingDataQualityReport(df)
+                report = report_gen.generate()
 
-        display_null_analysis(report)
-        st.markdown("---")
+            display_booking_overview(df, report)
+            st.markdown("---")
 
-        display_validations(report, df)
-        st.markdown("---")
+            display_null_analysis(report)
+            display_booking_null_note(report)
+            st.markdown("---")
 
-        display_route_validation(report, df)
-        st.markdown("---")
+            display_statistics(report)
 
-        display_statistics(report)
-        st.markdown("---")
+            # Download section
+            st.markdown("---")
+            st.header("📥 Download Reports")
 
-        display_flight_insights(df)
+            col1, col2 = st.columns(2)
 
-        # Download section
-        st.markdown("---")
-        st.header("📥 Download Reports")
+            with col1:
+                import json
 
-        col1, col2 = st.columns(2)
+                report_json = json.dumps(report, indent=2)
+                st.download_button(
+                    label="Download JSON Report",
+                    data=report_json,
+                    file_name="booking_quality_report.json",
+                    mime="application/json",
+                )
 
-        with col1:
-            # JSON download
-            import json
+            with col2:
+                null_df = pd.DataFrame(
+                    list(report["null_analysis"].items()),
+                    columns=["Column", "Null_Percentage"],
+                )
+                csv = null_df.to_csv(index=False)
+                st.download_button(
+                    label="Download Null Analysis CSV",
+                    data=csv,
+                    file_name="null_analysis.csv",
+                    mime="text/csv",
+                )
 
-            report_json = json.dumps(report, indent=2)
-            st.download_button(
-                label="Download JSON Report",
-                data=report_json,
-                file_name="data_quality_report.json",
-                mime="application/json",
-            )
+        else:
+            st.title("✈️ Flight Data Quality Dashboard")
 
-        with col2:
-            # CSV download (null analysis)
-            null_df = pd.DataFrame(
-                list(report["null_analysis"].items()),
-                columns=["Column", "Null_Percentage"],
-            )
-            csv = null_df.to_csv(index=False)
-            st.download_button(
-                label="Download Null Analysis CSV",
-                data=csv,
-                file_name="null_analysis.csv",
-                mime="text/csv",
-            )
+            with st.spinner("Generating flight quality report..."):
+                report_gen = DataQualityReport(df)
+                report = report_gen.generate()
+
+            # Display sections
+            display_overview(df, report)
+            st.markdown("---")
+
+            display_null_analysis(report)
+            st.markdown("---")
+
+            display_validations(report, df)
+            st.markdown("---")
+
+            display_route_validation(report, df)
+            st.markdown("---")
+
+            display_statistics(report)
+            st.markdown("---")
+
+            display_flight_insights(df)
+
+            # Download section
+            st.markdown("---")
+            st.header("📥 Download Reports")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                import json
+
+                report_json = json.dumps(report, indent=2)
+                st.download_button(
+                    label="Download JSON Report",
+                    data=report_json,
+                    file_name="data_quality_report.json",
+                    mime="application/json",
+                )
+
+            with col2:
+                null_df = pd.DataFrame(
+                    list(report["null_analysis"].items()),
+                    columns=["Column", "Null_Percentage"],
+                )
+                csv = null_df.to_csv(index=False)
+                st.download_button(
+                    label="Download Null Analysis CSV",
+                    data=csv,
+                    file_name="null_analysis.csv",
+                    mime="text/csv",
+                )
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")

@@ -129,6 +129,22 @@ class DataQualityChecker:
         raise ValueError(f"Method {method} not implemented")
 
 
+BOOKING_COLUMNS = {"num_passengers", "sales_channel", "trip_type", "booking_complete"}
+FLIGHT_COLUMNS = {"op_unique_carrier", "origin", "dest", "fl_date"}
+
+
+def detect_dataset_type(df: pd.DataFrame) -> str:
+    """Detect whether a DataFrame contains booking or flight data.
+
+    Returns:
+        "booking" if booking-specific columns are present, "flight" otherwise
+    """
+    cols = set(df.columns)
+    if BOOKING_COLUMNS.issubset(cols):
+        return "booking"
+    return "flight"
+
+
 class FlightDataValidator:
     """Flight-specific data validation rules"""
 
@@ -301,6 +317,87 @@ class FlightDataValidator:
 
         invalid_mask = self.df["distance"] <= 0
         return self.df[invalid_mask]
+
+
+class CustomerBookingValidator:
+    """Booking-specific data validation rules"""
+
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
+
+    def validate_booking_origin(self) -> pd.DataFrame:
+        """Flag rows where booking_origin is '(not set)' (pseudo-missing data).
+
+        Returns:
+            DataFrame of rows with booking_origin == '(not set)'
+        """
+        if "booking_origin" not in self.df.columns:
+            return pd.DataFrame()
+        mask = self.df["booking_origin"].str.strip() == "(not set)"
+        return self.df[mask]
+
+
+class BookingDataQualityReport:
+    """Generate data quality reports for customer booking data"""
+
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
+        self.checker = DataQualityChecker()
+        self.checker.df = df
+        self.validator = CustomerBookingValidator(df)
+
+    def generate(self) -> Dict[str, Any]:
+        """Generate complete booking data quality report.
+
+        Returns:
+            Dictionary containing all report sections
+        """
+        total_rows = len(self.df)
+        duplicate_count = int(self.checker.check_duplicates())
+
+        # Completion rate from booking_complete column
+        completion_rate = 0.0
+        if "booking_complete" in self.df.columns and total_rows > 0:
+            completion_rate = round(
+                (self.df["booking_complete"].sum() / total_rows) * 100, 2
+            )
+
+        # Count (not set) values in booking_origin
+        not_set_df = self.validator.validate_booking_origin()
+        not_set_count = len(not_set_df)
+
+        # Statistics for numeric columns
+        statistics: Dict[str, Any] = {}
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            try:
+                statistics[col] = self.checker.calculate_statistics(col)
+            except Exception as e:
+                statistics[col] = {"error": str(e)}
+
+        report: Dict[str, Any] = {
+            "generated_at": datetime.now().isoformat(),
+            "dataset_type": "booking",
+            "overview": {
+                "total_rows": total_rows,
+                "total_columns": len(self.df.columns),
+                "memory_usage": int(self.df.memory_usage(deep=True).sum()),
+                "completion_rate": completion_rate,
+                "duplicate_count": duplicate_count,
+            },
+            "null_analysis": self.checker.calculate_null_percentage(),
+            "duplicates": {
+                "total_duplicates": duplicate_count,
+                "duplicate_percentage": round(
+                    (duplicate_count / total_rows) * 100, 2
+                )
+                if total_rows > 0
+                else 0.0,
+            },
+            "statistics": statistics,
+            "not_set_booking_origin": not_set_count,
+        }
+        return report
 
 
 class DataQualityReport:
