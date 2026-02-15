@@ -361,9 +361,7 @@ class BaseDataQualityReport:
         duplicate_count = int(self.checker.check_duplicates())
         return {
             "total_duplicates": duplicate_count,
-            "duplicate_percentage": round(
-                (duplicate_count / total_rows) * 100, 2
-            )
+            "duplicate_percentage": round((duplicate_count / total_rows) * 100, 2)
             if total_rows > 0
             else 0.0,
         }

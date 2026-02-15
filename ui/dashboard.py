@@ -467,7 +467,7 @@ def display_booking_null_note(report: dict):
     if not_set_count > 0:
         st.subheader("Pseudo-Missing Data")
         st.warning(
-            f'**booking_origin** contains {not_set_count:,} records with value '
+            f"**booking_origin** contains {not_set_count:,} records with value "
             f'"{PSEUDO_MISSING_VALUE}", which may represent missing data.'
         )
 

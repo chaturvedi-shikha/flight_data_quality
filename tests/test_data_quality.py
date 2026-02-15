@@ -595,8 +595,20 @@ class TestBookingDataQualityReport:
         return pd.DataFrame(
             {
                 "num_passengers": [1, 2, 1, 1, 2],
-                "sales_channel": ["Internet", "Internet", "Mobile", "Internet", "Internet"],
-                "trip_type": ["RoundTrip", "OneWay", "RoundTrip", "OneWay", "RoundTrip"],
+                "sales_channel": [
+                    "Internet",
+                    "Internet",
+                    "Mobile",
+                    "Internet",
+                    "Internet",
+                ],
+                "trip_type": [
+                    "RoundTrip",
+                    "OneWay",
+                    "RoundTrip",
+                    "OneWay",
+                    "RoundTrip",
+                ],
                 "booking_complete": [1, 0, 0, 1, 0],
                 "booking_origin": ["US", "(not set)", "UK", "AU", "US"],
                 "length_of_stay": [5, 3, 7, 2, 5],
