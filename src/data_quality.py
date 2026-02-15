@@ -130,7 +130,7 @@ class DataQualityChecker:
 
 
 BOOKING_COLUMNS = {"num_passengers", "sales_channel", "trip_type", "booking_complete"}
-FLIGHT_COLUMNS = {"op_unique_carrier", "origin", "dest", "fl_date"}
+PSEUDO_MISSING_VALUE = "(not set)"
 
 
 def detect_dataset_type(df: pd.DataFrame) -> str:
@@ -333,87 +333,17 @@ class CustomerBookingValidator:
         """
         if "booking_origin" not in self.df.columns:
             return pd.DataFrame()
-        mask = self.df["booking_origin"].str.strip() == "(not set)"
+        mask = self.df["booking_origin"].str.strip() == PSEUDO_MISSING_VALUE
         return self.df[mask]
 
 
-class BookingDataQualityReport:
-    """Generate data quality reports for customer booking data"""
+class BaseDataQualityReport:
+    """Base class with shared report generation logic"""
 
     def __init__(self, df: pd.DataFrame):
         self.df = df
         self.checker = DataQualityChecker()
         self.checker.df = df
-        self.validator = CustomerBookingValidator(df)
-
-    def generate(self) -> Dict[str, Any]:
-        """Generate complete booking data quality report.
-
-        Returns:
-            Dictionary containing all report sections
-        """
-        total_rows = len(self.df)
-        duplicate_count = int(self.checker.check_duplicates())
-
-        # Completion rate from booking_complete column
-        completion_rate = 0.0
-        if "booking_complete" in self.df.columns and total_rows > 0:
-            completion_rate = round(
-                (self.df["booking_complete"].sum() / total_rows) * 100, 2
-            )
-
-        # Count (not set) values in booking_origin
-        not_set_df = self.validator.validate_booking_origin()
-        not_set_count = len(not_set_df)
-
-        # Statistics for numeric columns
-        statistics: Dict[str, Any] = {}
-        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
-        for col in numeric_cols:
-            try:
-                statistics[col] = self.checker.calculate_statistics(col)
-            except Exception as e:
-                statistics[col] = {"error": str(e)}
-
-        report: Dict[str, Any] = {
-            "generated_at": datetime.now().isoformat(),
-            "dataset_type": "booking",
-            "overview": {
-                "total_rows": total_rows,
-                "total_columns": len(self.df.columns),
-                "memory_usage": int(self.df.memory_usage(deep=True).sum()),
-                "completion_rate": completion_rate,
-                "duplicate_count": duplicate_count,
-            },
-            "null_analysis": self.checker.calculate_null_percentage(),
-            "duplicates": {
-                "total_duplicates": duplicate_count,
-                "duplicate_percentage": round(
-                    (duplicate_count / total_rows) * 100, 2
-                )
-                if total_rows > 0
-                else 0.0,
-            },
-            "statistics": statistics,
-            "not_set_booking_origin": not_set_count,
-        }
-        return report
-
-
-class DataQualityReport:
-    """Generate comprehensive data quality reports"""
-
-    def __init__(self, df: pd.DataFrame):
-        """
-        Initialize DataQualityReport
-
-        Args:
-            df: DataFrame to analyze
-        """
-        self.df = df
-        self.checker = DataQualityChecker()
-        self.checker.df = df
-        self.validator = FlightDataValidator(df)
 
     def _generate_overview(self) -> Dict[str, Any]:
         """Generate overview statistics"""
@@ -421,8 +351,81 @@ class DataQualityReport:
             "total_rows": len(self.df),
             "total_columns": len(self.df.columns),
             "memory_usage": int(self.df.memory_usage(deep=True).sum()),
-            "column_list": list(self.df.columns),
         }
+
+    def _generate_null_analysis(self) -> Dict[str, float]:
+        return self.checker.calculate_null_percentage()
+
+    def _generate_duplicates(self) -> Dict[str, Any]:
+        total_rows = len(self.df)
+        duplicate_count = int(self.checker.check_duplicates())
+        return {
+            "total_duplicates": duplicate_count,
+            "duplicate_percentage": round(
+                (duplicate_count / total_rows) * 100, 2
+            )
+            if total_rows > 0
+            else 0.0,
+        }
+
+    def _generate_statistics(self) -> Dict[str, Any]:
+        statistics: Dict[str, Any] = {}
+        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            try:
+                statistics[col] = self.checker.calculate_statistics(col)
+            except Exception as e:
+                statistics[col] = {"error": str(e)}
+        return statistics
+
+
+class BookingDataQualityReport(BaseDataQualityReport):
+    """Generate data quality reports for customer booking data"""
+
+    def __init__(self, df: pd.DataFrame):
+        super().__init__(df)
+        self.validator = CustomerBookingValidator(df)
+
+    def generate(self) -> Dict[str, Any]:
+        """Generate complete booking data quality report."""
+        total_rows = len(self.df)
+        duplicates = self._generate_duplicates()
+
+        completion_rate = 0.0
+        if "booking_complete" in self.df.columns and total_rows > 0:
+            completion_rate = round(
+                (self.df["booking_complete"].sum() / total_rows) * 100, 2
+            )
+
+        not_set_count = len(self.validator.validate_booking_origin())
+
+        overview = self._generate_overview()
+        overview["completion_rate"] = completion_rate
+        overview["duplicate_count"] = duplicates["total_duplicates"]
+
+        return {
+            "generated_at": datetime.now().isoformat(),
+            "dataset_type": "booking",
+            "overview": overview,
+            "null_analysis": self._generate_null_analysis(),
+            "duplicates": duplicates,
+            "statistics": self._generate_statistics(),
+            "not_set_booking_origin": not_set_count,
+        }
+
+
+class DataQualityReport(BaseDataQualityReport):
+    """Generate comprehensive data quality reports"""
+
+    def __init__(self, df: pd.DataFrame):
+        super().__init__(df)
+        self.validator = FlightDataValidator(df)
+
+    def _generate_overview(self) -> Dict[str, Any]:
+        """Generate overview statistics with column list"""
+        overview = super()._generate_overview()
+        overview["column_list"] = list(self.df.columns)
+        return overview
 
     def generate_route_validation_details(
         self,
@@ -500,25 +503,11 @@ class DataQualityReport:
         report = {
             "generated_at": datetime.now().isoformat(),
             "overview": self._generate_overview(),
-            "null_analysis": self.checker.calculate_null_percentage(),
-            "duplicates": {
-                "total_duplicates": int(self.checker.check_duplicates()),
-                "duplicate_percentage": round(
-                    (self.checker.check_duplicates() / len(self.df)) * 100, 2
-                ),
-            },
-            "statistics": {},
+            "null_analysis": self._generate_null_analysis(),
+            "duplicates": self._generate_duplicates(),
+            "statistics": self._generate_statistics(),
             "validations": {},
         }
-
-        # Calculate statistics for numeric columns
-        numeric_cols = self.df.select_dtypes(include=[np.number]).columns
-        stats = report["statistics"]
-        for col in numeric_cols:
-            try:
-                stats[col] = self.checker.calculate_statistics(col)  # type: ignore[index]
-            except Exception as e:
-                stats[col] = {"error": str(e)}  # type: ignore[index]
 
         # Run flight-specific validations (compute once, reuse for details)
         same_origin_dest_df = self.validator.validate_origin_destination_different()

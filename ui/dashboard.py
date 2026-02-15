@@ -18,6 +18,7 @@ from data_quality import (
     DataQualityReport,
     BookingDataQualityReport,
     detect_dataset_type,
+    PSEUDO_MISSING_VALUE,
 )
 
 # Centralized color definitions for severity and issue types
@@ -467,7 +468,39 @@ def display_booking_null_note(report: dict):
         st.subheader("Pseudo-Missing Data")
         st.warning(
             f'**booking_origin** contains {not_set_count:,} records with value '
-            f'"(not set)", which may represent missing data.'
+            f'"{PSEUDO_MISSING_VALUE}", which may represent missing data.'
+        )
+
+
+def display_download_section(report: dict, report_filename: str):
+    """Display download buttons for report exports"""
+    import json
+
+    st.markdown("---")
+    st.header("📥 Download Reports")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        report_json = json.dumps(report, indent=2)
+        st.download_button(
+            label="Download JSON Report",
+            data=report_json,
+            file_name=report_filename,
+            mime="application/json",
+        )
+
+    with col2:
+        null_df = pd.DataFrame(
+            list(report["null_analysis"].items()),
+            columns=["Column", "Null_Percentage"],
+        )
+        csv = null_df.to_csv(index=False)
+        st.download_button(
+            label="Download Null Analysis CSV",
+            data=csv,
+            file_name="null_analysis.csv",
+            mime="text/csv",
         )
 
 
@@ -531,35 +564,7 @@ def main():
 
             display_statistics(report)
 
-            # Download section
-            st.markdown("---")
-            st.header("📥 Download Reports")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                import json
-
-                report_json = json.dumps(report, indent=2)
-                st.download_button(
-                    label="Download JSON Report",
-                    data=report_json,
-                    file_name="booking_quality_report.json",
-                    mime="application/json",
-                )
-
-            with col2:
-                null_df = pd.DataFrame(
-                    list(report["null_analysis"].items()),
-                    columns=["Column", "Null_Percentage"],
-                )
-                csv = null_df.to_csv(index=False)
-                st.download_button(
-                    label="Download Null Analysis CSV",
-                    data=csv,
-                    file_name="null_analysis.csv",
-                    mime="text/csv",
-                )
+            display_download_section(report, "booking_quality_report.json")
 
         else:
             st.title("✈️ Flight Data Quality Dashboard")
@@ -586,35 +591,7 @@ def main():
 
             display_flight_insights(df)
 
-            # Download section
-            st.markdown("---")
-            st.header("📥 Download Reports")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                import json
-
-                report_json = json.dumps(report, indent=2)
-                st.download_button(
-                    label="Download JSON Report",
-                    data=report_json,
-                    file_name="data_quality_report.json",
-                    mime="application/json",
-                )
-
-            with col2:
-                null_df = pd.DataFrame(
-                    list(report["null_analysis"].items()),
-                    columns=["Column", "Null_Percentage"],
-                )
-                csv = null_df.to_csv(index=False)
-                st.download_button(
-                    label="Download Null Analysis CSV",
-                    data=csv,
-                    file_name="null_analysis.csv",
-                    mime="text/csv",
-                )
+            display_download_section(report, "data_quality_report.json")
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
