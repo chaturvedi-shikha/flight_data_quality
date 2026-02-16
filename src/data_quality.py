@@ -350,14 +350,22 @@ class BookingCompletionAnalyzer:
             return {"total_bookings": 0, "completed": 0, "completion_rate": 0.0}
         completed = int(self.df["booking_complete"].sum())
         rate = round((completed / total) * 100, 2)
-        return {"total_bookings": total, "completed": completed, "completion_rate": rate}
+        return {
+            "total_bookings": total,
+            "completed": completed,
+            "completion_rate": rate,
+        }
 
     def _group_completion(self, column: str) -> pd.DataFrame:
         """Helper to compute completion rate grouped by a column."""
-        grouped = self.df.groupby(column).agg(
-            total=("booking_complete", "count"),
-            completed=("booking_complete", "sum"),
-        ).reset_index()
+        grouped = (
+            self.df.groupby(column)
+            .agg(
+                total=("booking_complete", "count"),
+                completed=("booking_complete", "sum"),
+            )
+            .reset_index()
+        )
         grouped["completion_rate"] = round(
             (grouped["completed"] / grouped["total"]) * 100, 2
         )
@@ -387,10 +395,14 @@ class BookingCompletionAnalyzer:
         available = [c for c in extras_cols if c in self.df.columns]
         df = self.df.copy()
         df["num_extras"] = df[available].sum(axis=1).astype(int) if available else 0
-        grouped = df.groupby("num_extras").agg(
-            total=("booking_complete", "count"),
-            completed=("booking_complete", "sum"),
-        ).reset_index()
+        grouped = (
+            df.groupby("num_extras")
+            .agg(
+                total=("booking_complete", "count"),
+                completed=("booking_complete", "sum"),
+            )
+            .reset_index()
+        )
         grouped["completion_rate"] = round(
             (grouped["completed"] / grouped["total"]) * 100, 2
         )
@@ -404,9 +416,7 @@ class BookingCompletionAnalyzer:
         """Volume percentage and completion rate by booking origin."""
         total_bookings = len(self.df)
         result = self._group_completion("booking_origin")
-        result["volume_pct"] = round(
-            (result["total"] / total_bookings) * 100, 2
-        )
+        result["volume_pct"] = round((result["total"] / total_bookings) * 100, 2)
         return result
 
 
