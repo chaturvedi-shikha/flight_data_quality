@@ -337,6 +337,89 @@ class CustomerBookingValidator:
         return self.df[mask]
 
 
+class BookingCompletionAnalyzer:
+    """Analyze booking completion rates across different dimensions"""
+
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
+
+    def overall_completion_rate(self) -> Dict[str, Any]:
+        """Calculate overall booking completion rate."""
+        total = len(self.df)
+        if total == 0:
+            return {"total_bookings": 0, "completed": 0, "completion_rate": 0.0}
+        completed = int(self.df["booking_complete"].sum())
+        rate = round((completed / total) * 100, 2)
+        return {
+            "total_bookings": total,
+            "completed": completed,
+            "completion_rate": rate,
+        }
+
+    def _group_completion(self, column: str) -> pd.DataFrame:
+        """Helper to compute completion rate grouped by a column."""
+        grouped = (
+            self.df.groupby(column)
+            .agg(
+                total=("booking_complete", "count"),
+                completed=("booking_complete", "sum"),
+            )
+            .reset_index()
+        )
+        grouped["completion_rate"] = (
+            ((grouped["completed"] / grouped["total"]) * 100).fillna(0).round(2)
+        )
+        return grouped
+
+    def completion_by_channel(self) -> pd.DataFrame:
+        """Completion rate by sales channel."""
+        return self._group_completion("sales_channel")
+
+    def completion_by_trip_type(self) -> pd.DataFrame:
+        """Completion rate by trip type."""
+        return self._group_completion("trip_type")
+
+    def completion_by_origin(self, top_n: int = 15) -> pd.DataFrame:
+        """Completion rate by booking origin, sorted by volume, top N."""
+        result = self._group_completion("booking_origin")
+        result = result.sort_values("total", ascending=False).head(top_n)
+        return result.reset_index(drop=True)
+
+    def completion_by_extras(self) -> pd.DataFrame:
+        """Completion rate by number of extras requested (0-3)."""
+        extras_cols = [
+            "wants_extra_baggage",
+            "wants_preferred_seat",
+            "wants_in_flight_meals",
+        ]
+        available = [c for c in extras_cols if c in self.df.columns]
+        df = self.df.copy()
+        df["num_extras"] = df[available].sum(axis=1).astype(int) if available else 0
+        grouped = (
+            df.groupby("num_extras")
+            .agg(
+                total=("booking_complete", "count"),
+                completed=("booking_complete", "sum"),
+            )
+            .reset_index()
+        )
+        grouped["completion_rate"] = (
+            ((grouped["completed"] / grouped["total"]) * 100).fillna(0).round(2)
+        )
+        return grouped
+
+    def completion_by_flight_day(self) -> pd.DataFrame:
+        """Completion rate by flight day."""
+        return self._group_completion("flight_day")
+
+    def volume_vs_completion(self) -> pd.DataFrame:
+        """Volume percentage and completion rate by booking origin."""
+        total_bookings = len(self.df)
+        result = self._group_completion("booking_origin")
+        result["volume_pct"] = round((result["total"] / total_bookings) * 100, 2)
+        return result
+
+
 class BaseDataQualityReport:
     """Base class with shared report generation logic"""
 

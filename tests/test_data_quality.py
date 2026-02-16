@@ -11,6 +11,7 @@ from src.data_quality import (
     FlightDataValidator,
     DataQualityReport,
     BookingDataQualityReport,
+    BookingCompletionAnalyzer,
     CustomerBookingValidator,
     detect_dataset_type,
     run_quality_check,
@@ -686,3 +687,187 @@ class TestIntegration:
 
         assert report is not None
         assert (tmp_path / "data_quality_report.json").exists()
+
+
+class TestBookingCompletionAnalyzer:
+    """Test suite for booking completion rate analytics"""
+
+    @pytest.fixture
+    def booking_data(self):
+        """Sample booking data with known completion rates"""
+        return pd.DataFrame(
+            {
+                "num_passengers": [1, 2, 1, 1, 2, 1, 1, 2, 1, 1],
+                "sales_channel": [
+                    "Internet",
+                    "Internet",
+                    "Mobile",
+                    "Internet",
+                    "Internet",
+                    "Mobile",
+                    "Internet",
+                    "Mobile",
+                    "Internet",
+                    "Internet",
+                ],
+                "trip_type": [
+                    "RoundTrip",
+                    "OneWay",
+                    "RoundTrip",
+                    "CircleTrip",
+                    "RoundTrip",
+                    "OneWay",
+                    "RoundTrip",
+                    "RoundTrip",
+                    "OneWay",
+                    "RoundTrip",
+                ],
+                "purchase_lead": [10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+                "length_of_stay": [5, 3, 7, 2, 5, 4, 6, 8, 3, 5],
+                "flight_hour": [8, 10, 14, 16, 9, 11, 13, 15, 7, 12],
+                "flight_day": [
+                    "Mon",
+                    "Tue",
+                    "Wed",
+                    "Thu",
+                    "Fri",
+                    "Mon",
+                    "Tue",
+                    "Wed",
+                    "Thu",
+                    "Fri",
+                ],
+                "route": [
+                    "JFKLAX",
+                    "LAXSFO",
+                    "ORDJFK",
+                    "JFKLAX",
+                    "SFOJFK",
+                    "JFKLAX",
+                    "LAXSFO",
+                    "ORDJFK",
+                    "JFKLAX",
+                    "SFOJFK",
+                ],
+                "booking_origin": [
+                    "United States",
+                    "Australia",
+                    "United Kingdom",
+                    "Australia",
+                    "New Zealand",
+                    "United States",
+                    "India",
+                    "Australia",
+                    "United Kingdom",
+                    "New Zealand",
+                ],
+                "wants_extra_baggage": [1, 0, 1, 0, 1, 0, 1, 1, 0, 1],
+                "wants_preferred_seat": [1, 0, 0, 0, 1, 0, 1, 0, 0, 1],
+                "wants_in_flight_meals": [1, 0, 0, 0, 1, 0, 1, 0, 0, 0],
+                "flight_duration": [5.5, 1.5, 3.0, 5.5, 5.0, 5.5, 1.5, 3.0, 5.5, 5.0],
+                "booking_complete": [1, 0, 0, 0, 1, 0, 1, 0, 1, 1],
+            }
+        )
+
+    def test_overall_completion_rate(self, booking_data):
+        """Test overall completion rate calculation"""
+        analyzer = BookingCompletionAnalyzer(booking_data)
+        result = analyzer.overall_completion_rate()
+
+        assert result["total_bookings"] == 10
+        assert result["completed"] == 5
+        assert result["completion_rate"] == 50.0
+
+    def test_completion_by_channel(self, booking_data):
+        """Test completion rate grouped by sales channel"""
+        analyzer = BookingCompletionAnalyzer(booking_data)
+        result = analyzer.completion_by_channel()
+
+        assert isinstance(result, pd.DataFrame)
+        assert "sales_channel" in result.columns
+        assert "completion_rate" in result.columns
+        assert "total" in result.columns
+        assert "completed" in result.columns
+        assert len(result) == 2  # Internet and Mobile
+
+    def test_completion_by_trip_type(self, booking_data):
+        """Test completion rate grouped by trip type"""
+        analyzer = BookingCompletionAnalyzer(booking_data)
+        result = analyzer.completion_by_trip_type()
+
+        assert isinstance(result, pd.DataFrame)
+        assert "trip_type" in result.columns
+        assert "completion_rate" in result.columns
+        assert len(result) == 3  # RoundTrip, OneWay, CircleTrip
+
+    def test_completion_by_origin_top_n(self, booking_data):
+        """Test completion rate by booking origin with top N limit"""
+        analyzer = BookingCompletionAnalyzer(booking_data)
+        result = analyzer.completion_by_origin(top_n=3)
+
+        assert isinstance(result, pd.DataFrame)
+        assert "booking_origin" in result.columns
+        assert "completion_rate" in result.columns
+        assert "total" in result.columns
+        assert len(result) <= 3
+
+    def test_completion_by_origin_sorted_by_volume(self, booking_data):
+        """Test that origins are sorted by volume (total bookings)"""
+        analyzer = BookingCompletionAnalyzer(booking_data)
+        result = analyzer.completion_by_origin(top_n=15)
+
+        # Australia has most bookings (3), should be first
+        assert result.iloc[0]["booking_origin"] == "Australia"
+
+    def test_completion_by_extras(self, booking_data):
+        """Test completion rate by number of extras requested"""
+        analyzer = BookingCompletionAnalyzer(booking_data)
+        result = analyzer.completion_by_extras()
+
+        assert isinstance(result, pd.DataFrame)
+        assert "num_extras" in result.columns
+        assert "completion_rate" in result.columns
+        # Extras range from 0 to 3
+        assert result["num_extras"].min() >= 0
+        assert result["num_extras"].max() <= 3
+
+    def test_completion_by_flight_day(self, booking_data):
+        """Test completion rate by flight day"""
+        analyzer = BookingCompletionAnalyzer(booking_data)
+        result = analyzer.completion_by_flight_day()
+
+        assert isinstance(result, pd.DataFrame)
+        assert "flight_day" in result.columns
+        assert "completion_rate" in result.columns
+
+    def test_volume_vs_completion(self, booking_data):
+        """Test volume vs completion insight data"""
+        analyzer = BookingCompletionAnalyzer(booking_data)
+        result = analyzer.volume_vs_completion()
+
+        assert isinstance(result, pd.DataFrame)
+        assert "booking_origin" in result.columns
+        assert "volume_pct" in result.columns
+        assert "completion_rate" in result.columns
+        # Volume percentages should sum to ~100
+        assert abs(result["volume_pct"].sum() - 100.0) < 0.1
+
+    def test_empty_dataframe(self):
+        """Test analyzer handles empty DataFrame gracefully"""
+        df = pd.DataFrame(
+            columns=[
+                "sales_channel",
+                "trip_type",
+                "booking_origin",
+                "wants_extra_baggage",
+                "wants_preferred_seat",
+                "wants_in_flight_meals",
+                "flight_day",
+                "booking_complete",
+            ]
+        )
+        analyzer = BookingCompletionAnalyzer(df)
+        result = analyzer.overall_completion_rate()
+
+        assert result["total_bookings"] == 0
+        assert result["completion_rate"] == 0.0

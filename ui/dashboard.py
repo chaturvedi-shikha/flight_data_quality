@@ -17,6 +17,7 @@ from data_quality import (
     FlightDataValidator,
     DataQualityReport,
     BookingDataQualityReport,
+    BookingCompletionAnalyzer,
     detect_dataset_type,
     PSEUDO_MISSING_VALUE,
 )
@@ -38,6 +39,12 @@ ISSUE_TYPE_COLORS = {
     "Same Airport": SEVERITY_COLORS["High"],
     "Distance Mismatch": SEVERITY_COLORS["Medium"],
 }
+
+# Booking completion rate baseline reference (from initial data analysis)
+COMPLETION_RATE_BASELINE = 14.96
+
+# Threshold below which a high-volume origin is flagged as an optimization opportunity
+OPPORTUNITY_COMPLETION_THRESHOLD = 10
 
 
 # Page configuration
@@ -472,6 +479,201 @@ def display_booking_null_note(report: dict):
         )
 
 
+def display_completion_analytics(df: pd.DataFrame):
+    """Display booking completion rate analytics dashboard"""
+    st.header("📈 Completion Rate Analytics")
+
+    analyzer = BookingCompletionAnalyzer(df)
+
+    # Overall completion rate gauge
+    overall = analyzer.overall_completion_rate()
+    fig_gauge = go.Figure(
+        go.Indicator(
+            mode="gauge+number+delta",
+            value=overall["completion_rate"],
+            number={"suffix": "%"},
+            title={"text": "Overall Completion Rate"},
+            delta={"reference": COMPLETION_RATE_BASELINE, "suffix": "%"},
+            gauge={
+                "axis": {"range": [0, 100]},
+                "bar": {"color": "#636EFA"},
+                "steps": [
+                    {"range": [0, 10], "color": "#ffcccc"},
+                    {"range": [10, 20], "color": "#fff3cd"},
+                    {"range": [20, 50], "color": "#cce5ff"},
+                    {"range": [50, 100], "color": "#ccffcc"},
+                ],
+                "threshold": {
+                    "line": {"color": "red", "width": 4},
+                    "thickness": 0.75,
+                    "value": COMPLETION_RATE_BASELINE,
+                },
+            },
+        )
+    )
+    fig_gauge.update_layout(height=300)
+    st.plotly_chart(fig_gauge, use_container_width=True)
+
+    st.markdown(
+        f"**{overall['completed']:,}** of **{overall['total_bookings']:,}** "
+        f"bookings completed ({overall['completion_rate']}%)"
+    )
+
+    st.markdown("---")
+
+    # Channel and Trip Type side by side
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("By Sales Channel")
+        channel_data = analyzer.completion_by_channel()
+        fig_channel = px.bar(
+            channel_data,
+            x="sales_channel",
+            y="completion_rate",
+            text="completion_rate",
+            title="Completion Rate by Sales Channel",
+            labels={
+                "sales_channel": "Sales Channel",
+                "completion_rate": "Completion Rate (%)",
+            },
+            color="sales_channel",
+            color_discrete_sequence=["#636EFA", "#EF553B"],
+        )
+        fig_channel.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+        st.plotly_chart(fig_channel, use_container_width=True)
+
+    with col2:
+        st.subheader("By Trip Type")
+        trip_data = analyzer.completion_by_trip_type()
+        fig_trip = px.bar(
+            trip_data,
+            x="trip_type",
+            y="completion_rate",
+            text="completion_rate",
+            title="Completion Rate by Trip Type",
+            labels={
+                "trip_type": "Trip Type",
+                "completion_rate": "Completion Rate (%)",
+            },
+            color="trip_type",
+            color_discrete_sequence=["#636EFA", "#EF553B", "#00CC96"],
+        )
+        fig_trip.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+        st.plotly_chart(fig_trip, use_container_width=True)
+
+    st.markdown("---")
+
+    # Booking Origin (top 15) horizontal bar chart
+    st.subheader("By Booking Origin (Top 15)")
+    origin_data = analyzer.completion_by_origin(top_n=15)
+    fig_origin = px.bar(
+        origin_data,
+        y="booking_origin",
+        x="completion_rate",
+        text="completion_rate",
+        orientation="h",
+        title="Completion Rate by Booking Origin (Top 15 by Volume)",
+        labels={
+            "booking_origin": "Booking Origin",
+            "completion_rate": "Completion Rate (%)",
+        },
+        color="completion_rate",
+        color_continuous_scale="RdYlGn",
+    )
+    fig_origin.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+    fig_origin.update_layout(yaxis={"categoryorder": "total ascending"})
+    st.plotly_chart(fig_origin, use_container_width=True)
+
+    st.markdown("---")
+
+    # Extras and Flight Day side by side
+    col3, col4 = st.columns(2)
+
+    with col3:
+        st.subheader("By Number of Extras (0-3)")
+        extras_data = analyzer.completion_by_extras()
+        fig_extras = px.line(
+            extras_data,
+            x="num_extras",
+            y="completion_rate",
+            markers=True,
+            title="Completion Rate by Extras Requested",
+            labels={
+                "num_extras": "Number of Extras",
+                "completion_rate": "Completion Rate (%)",
+            },
+        )
+        fig_extras.update_traces(
+            line=dict(color="#636EFA", width=3),
+            marker=dict(size=10),
+        )
+        st.plotly_chart(fig_extras, use_container_width=True)
+
+    with col4:
+        st.subheader("By Flight Day")
+        day_data = analyzer.completion_by_flight_day()
+        day_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        day_data["flight_day"] = pd.Categorical(
+            day_data["flight_day"], categories=day_order, ordered=True
+        )
+        day_data = day_data.sort_values("flight_day")
+        fig_day = px.imshow(
+            [day_data["completion_rate"].values],
+            x=day_data["flight_day"].values,
+            y=["Completion Rate"],
+            color_continuous_scale="RdYlGn",
+            title="Completion Rate Heatmap by Flight Day",
+            text_auto=".1f",
+            aspect="auto",
+        )
+        fig_day.update_layout(height=200)
+        st.plotly_chart(fig_day, use_container_width=True)
+
+    st.markdown("---")
+
+    # Key Insight: Volume vs Completion
+    st.subheader("Key Insight: Volume vs Completion")
+    vol_data = analyzer.volume_vs_completion()
+    vol_data = vol_data.sort_values("total", ascending=False).head(10)
+
+    # Highlight the biggest opportunity
+    if len(vol_data) > 0:
+        max_vol = vol_data.iloc[0]
+        if max_vol["completion_rate"] < OPPORTUNITY_COMPLETION_THRESHOLD:
+            st.warning(
+                f"**{max_vol['booking_origin']}** accounts for "
+                f"**{max_vol['volume_pct']}%** of booking volume but has only "
+                f"**{max_vol['completion_rate']}%** completion rate "
+                f"— biggest optimization opportunity!"
+            )
+
+    fig_vol = go.Figure()
+    fig_vol.add_trace(
+        go.Bar(
+            x=vol_data["booking_origin"],
+            y=vol_data["volume_pct"],
+            name="Volume %",
+            marker_color="#636EFA",
+        )
+    )
+    fig_vol.add_trace(
+        go.Bar(
+            x=vol_data["booking_origin"],
+            y=vol_data["completion_rate"],
+            name="Completion Rate %",
+            marker_color="#EF553B",
+        )
+    )
+    fig_vol.update_layout(
+        title="Volume Share vs Completion Rate by Origin",
+        barmode="group",
+        xaxis_title="Booking Origin",
+        yaxis_title="Percentage (%)",
+    )
+    st.plotly_chart(fig_vol, use_container_width=True)
+
+
 def display_download_section(report: dict, report_filename: str):
     """Display download buttons for report exports"""
     import json
@@ -556,6 +758,9 @@ def main():
                 report = report_gen.generate()
 
             display_booking_overview(df, report)
+            st.markdown("---")
+
+            display_completion_analytics(df)
             st.markdown("---")
 
             display_null_analysis(report)
