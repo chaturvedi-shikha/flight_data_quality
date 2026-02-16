@@ -366,8 +366,8 @@ class BookingCompletionAnalyzer:
             )
             .reset_index()
         )
-        grouped["completion_rate"] = round(
-            (grouped["completed"] / grouped["total"]) * 100, 2
+        grouped["completion_rate"] = (
+            ((grouped["completed"] / grouped["total"]) * 100).fillna(0).round(2)
         )
         return grouped
 
@@ -403,8 +403,8 @@ class BookingCompletionAnalyzer:
             )
             .reset_index()
         )
-        grouped["completion_rate"] = round(
-            (grouped["completed"] / grouped["total"]) * 100, 2
+        grouped["completion_rate"] = (
+            ((grouped["completed"] / grouped["total"]) * 100).fillna(0).round(2)
         )
         return grouped
 

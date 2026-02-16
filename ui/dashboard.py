@@ -40,6 +40,12 @@ ISSUE_TYPE_COLORS = {
     "Distance Mismatch": SEVERITY_COLORS["Medium"],
 }
 
+# Booking completion rate baseline reference (from initial data analysis)
+COMPLETION_RATE_BASELINE = 14.96
+
+# Threshold below which a high-volume origin is flagged as an optimization opportunity
+OPPORTUNITY_COMPLETION_THRESHOLD = 10
+
 
 # Page configuration
 st.set_page_config(
@@ -487,7 +493,7 @@ def display_completion_analytics(df: pd.DataFrame):
             value=overall["completion_rate"],
             number={"suffix": "%"},
             title={"text": "Overall Completion Rate"},
-            delta={"reference": 14.96, "suffix": "%"},
+            delta={"reference": COMPLETION_RATE_BASELINE, "suffix": "%"},
             gauge={
                 "axis": {"range": [0, 100]},
                 "bar": {"color": "#636EFA"},
@@ -500,7 +506,7 @@ def display_completion_analytics(df: pd.DataFrame):
                 "threshold": {
                     "line": {"color": "red", "width": 4},
                     "thickness": 0.75,
-                    "value": 14.96,
+                    "value": COMPLETION_RATE_BASELINE,
                 },
             },
         )
@@ -608,10 +614,10 @@ def display_completion_analytics(df: pd.DataFrame):
         st.subheader("By Flight Day")
         day_data = analyzer.completion_by_flight_day()
         day_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        day_data["day_order"] = day_data["flight_day"].apply(
-            lambda x: day_order.index(x) if x in day_order else 7
+        day_data["flight_day"] = pd.Categorical(
+            day_data["flight_day"], categories=day_order, ordered=True
         )
-        day_data = day_data.sort_values("day_order")
+        day_data = day_data.sort_values("flight_day")
         fig_day = px.imshow(
             [day_data["completion_rate"].values],
             x=day_data["flight_day"].values,
@@ -634,7 +640,7 @@ def display_completion_analytics(df: pd.DataFrame):
     # Highlight the biggest opportunity
     if len(vol_data) > 0:
         max_vol = vol_data.iloc[0]
-        if max_vol["completion_rate"] < 10:
+        if max_vol["completion_rate"] < OPPORTUNITY_COMPLETION_THRESHOLD:
             st.warning(
                 f"**{max_vol['booking_origin']}** accounts for "
                 f"**{max_vol['volume_pct']}%** of booking volume but has only "
