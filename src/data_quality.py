@@ -466,11 +466,11 @@ class BookingOutlierDetector:
                         "column": col,
                         "outlier_count": 0,
                         "outlier_pct": 0.0,
-                        "Q1": 0.0,
-                        "Q3": 0.0,
-                        "IQR": 0.0,
-                        "lower_bound": 0.0,
-                        "upper_bound": 0.0,
+                        "Q1": np.nan,
+                        "Q3": np.nan,
+                        "IQR": np.nan,
+                        "lower_bound": np.nan,
+                        "upper_bound": np.nan,
                     }
                 )
                 continue

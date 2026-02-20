@@ -989,3 +989,5 @@ class TestBookingOutlierDetector:
         summary = detector.iqr_outlier_summary(["num_passengers"])
         assert len(summary) == 1
         assert summary.iloc[0]["outlier_count"] == 0
+        assert pd.isna(summary.iloc[0]["Q1"])
+        assert pd.isna(summary.iloc[0]["Q3"])

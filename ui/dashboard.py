@@ -703,10 +703,8 @@ def display_booking_outliers(df: pd.DataFrame):
         "length_of_stay": ("Length of Stay (days)", max_length_of_stay),
     }
 
-    col1, col2, col3 = st.columns(3)
-    for col_ui, (col_name, (label, max_val)) in zip(
-        [col1, col2, col3], thresholds.items()
-    ):
+    cols = st.columns(len(thresholds))
+    for col_ui, (col_name, (label, max_val)) in zip(cols, thresholds.items()):
         flagged = detector.flag_by_threshold(col_name, max_value=max_val)
         with col_ui:
             st.metric(
