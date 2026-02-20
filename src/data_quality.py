@@ -420,6 +420,93 @@ class BookingCompletionAnalyzer:
         return result
 
 
+class BookingConsistencyValidator:
+    """Detect logical inconsistencies between trip_type, length_of_stay, and other fields"""
+
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
+
+    def flag_roundtrip_zero_stay(self) -> pd.DataFrame:
+        """Flag RoundTrip bookings with length_of_stay == 0."""
+        if (
+            "trip_type" not in self.df.columns
+            or "length_of_stay" not in self.df.columns
+        ):
+            return pd.DataFrame()
+        mask = (self.df["trip_type"] == "RoundTrip") & (self.df["length_of_stay"] == 0)
+        return self.df[mask]
+
+    def flag_oneway_positive_stay(self) -> pd.DataFrame:
+        """Flag OneWay bookings with length_of_stay > 0."""
+        if (
+            "trip_type" not in self.df.columns
+            or "length_of_stay" not in self.df.columns
+        ):
+            return pd.DataFrame()
+        mask = (self.df["trip_type"] == "OneWay") & (self.df["length_of_stay"] > 0)
+        return self.df[mask]
+
+    def flag_same_day_bookings(self) -> pd.DataFrame:
+        """Flag same-day bookings where purchase_lead == 0."""
+        if "purchase_lead" not in self.df.columns:
+            return pd.DataFrame()
+        mask = self.df["purchase_lead"] == 0
+        return self.df[mask]
+
+    def inconsistency_summary(self) -> pd.DataFrame:
+        """Generate a summary of all logical inconsistency checks.
+
+        Returns:
+            DataFrame with columns: check, count, severity, description
+        """
+        roundtrip_zero = len(self.flag_roundtrip_zero_stay())
+        oneway_positive = len(self.flag_oneway_positive_stay())
+        same_day = len(self.flag_same_day_bookings())
+
+        # CircleTrip completion rate
+        circle_count = 0
+        circle_desc = "CircleTrip completion rate: N/A"
+        if "trip_type" in self.df.columns and "booking_complete" in self.df.columns:
+            circle = self.df[self.df["trip_type"] == "CircleTrip"]
+            circle_count = len(circle)
+            if circle_count > 0:
+                rate = round((circle["booking_complete"].sum() / circle_count) * 100, 1)
+                circle_desc = (
+                    f"CircleTrip completion rate: {rate}% "
+                    f"({int(circle['booking_complete'].sum())}/{circle_count})"
+                )
+            else:
+                circle_desc = "CircleTrip completion rate: 0.0% (0/0)"
+
+        rows = [
+            {
+                "check": "RoundTrip with zero stay",
+                "count": roundtrip_zero,
+                "severity": "Medium",
+                "description": "RoundTrip bookings with length_of_stay = 0",
+            },
+            {
+                "check": "OneWay with positive stay",
+                "count": oneway_positive,
+                "severity": "High",
+                "description": "OneWay bookings with length_of_stay > 0",
+            },
+            {
+                "check": "CircleTrip low completion",
+                "count": circle_count,
+                "severity": "Medium",
+                "description": circle_desc,
+            },
+            {
+                "check": "Same-day bookings",
+                "count": same_day,
+                "severity": "Info",
+                "description": "Bookings with purchase_lead = 0",
+            },
+        ]
+        return pd.DataFrame(rows)
+
+
 class BookingOutlierDetector:
     """Detect outliers in booking numeric fields using thresholds and IQR"""
 

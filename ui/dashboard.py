@@ -19,6 +19,7 @@ from data_quality import (
     BookingDataQualityReport,
     BookingCompletionAnalyzer,
     BookingOutlierDetector,
+    BookingConsistencyValidator,
     detect_dataset_type,
     PSEUDO_MISSING_VALUE,
 )
@@ -751,6 +752,100 @@ def display_booking_outliers(df: pd.DataFrame):
         st.plotly_chart(fig, use_container_width=True)
 
 
+CONSISTENCY_SEVERITY_COLORS = {
+    "High": "#EF553B",
+    "Medium": "#FECB52",
+    "Info": "#636EFA",
+}
+
+
+def display_booking_consistency(df: pd.DataFrame):
+    """Display logical consistency validation for bookings"""
+    st.header("🔗 Logical Consistency Checks")
+
+    validator = BookingConsistencyValidator(df)
+    summary = validator.inconsistency_summary()
+
+    # Summary table with severity coloring
+    st.subheader("Inconsistency Summary")
+
+    def severity_style(val):
+        colors = {
+            "High": "background-color: #ffcccc; color: #de350b; font-weight: bold",
+            "Medium": "background-color: #fff3cd; color: #ff8b00; font-weight: bold",
+            "Info": "background-color: #deebff; color: #0052cc; font-weight: bold",
+        }
+        return colors.get(val, "")
+
+    st.dataframe(
+        summary.style.map(severity_style, subset=["severity"]),
+        use_container_width=True,
+    )
+
+    st.markdown("---")
+
+    # Metric cards
+    st.subheader("Flagged Records")
+    col1, col2, col3, col4 = st.columns(4)
+
+    roundtrip_zero = validator.flag_roundtrip_zero_stay()
+    oneway_positive = validator.flag_oneway_positive_stay()
+    same_day = validator.flag_same_day_bookings()
+
+    with col1:
+        st.metric(
+            "RoundTrip + Zero Stay",
+            f"{len(roundtrip_zero):,}",
+            delta="Medium" if len(roundtrip_zero) > 0 else None,
+            delta_color="off",
+        )
+    with col2:
+        st.metric(
+            "OneWay + Positive Stay",
+            f"{len(oneway_positive):,}",
+            delta="High" if len(oneway_positive) > 0 else None,
+            delta_color="inverse",
+        )
+    with col3:
+        circle = (
+            df[df["trip_type"] == "CircleTrip"]
+            if "trip_type" in df.columns
+            else pd.DataFrame()
+        )
+        st.metric(
+            "CircleTrip Records",
+            f"{len(circle):,}",
+            delta="Medium" if len(circle) > 0 else None,
+            delta_color="off",
+        )
+    with col4:
+        st.metric(
+            "Same-Day Bookings",
+            f"{len(same_day):,}",
+            delta="Info" if len(same_day) > 0 else None,
+            delta_color="off",
+        )
+
+    st.markdown("---")
+
+    # Drill-down tables
+    if len(roundtrip_zero) > 0:
+        with st.expander(f"RoundTrip with Zero Stay ({len(roundtrip_zero)} records)"):
+            st.dataframe(roundtrip_zero, use_container_width=True)
+
+    if len(oneway_positive) > 0:
+        with st.expander(f"OneWay with Positive Stay ({len(oneway_positive)} records)"):
+            st.dataframe(oneway_positive.head(50), use_container_width=True)
+            if len(oneway_positive) > 50:
+                st.info(f"Showing first 50 of {len(oneway_positive)} records")
+
+    if len(same_day) > 0:
+        with st.expander(f"Same-Day Bookings ({len(same_day)} records)"):
+            st.dataframe(same_day.head(50), use_container_width=True)
+            if len(same_day) > 50:
+                st.info(f"Showing first 50 of {len(same_day)} records")
+
+
 def display_download_section(report: dict, report_filename: str):
     """Display download buttons for report exports"""
     import json
@@ -841,6 +936,9 @@ def main():
             st.markdown("---")
 
             display_booking_outliers(df)
+            st.markdown("---")
+
+            display_booking_consistency(df)
             st.markdown("---")
 
             display_null_analysis(report)
