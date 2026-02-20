@@ -752,13 +752,6 @@ def display_booking_outliers(df: pd.DataFrame):
         st.plotly_chart(fig, use_container_width=True)
 
 
-CONSISTENCY_SEVERITY_COLORS = {
-    "High": "#EF553B",
-    "Medium": "#FECB52",
-    "Info": "#636EFA",
-}
-
-
 def display_booking_consistency(df: pd.DataFrame):
     """Display logical consistency validation for bookings"""
     st.header("🔗 Logical Consistency Checks")
@@ -831,7 +824,9 @@ def display_booking_consistency(df: pd.DataFrame):
     # Drill-down tables
     if len(roundtrip_zero) > 0:
         with st.expander(f"RoundTrip with Zero Stay ({len(roundtrip_zero)} records)"):
-            st.dataframe(roundtrip_zero, use_container_width=True)
+            st.dataframe(roundtrip_zero.head(50), use_container_width=True)
+            if len(roundtrip_zero) > 50:
+                st.info(f"Showing first 50 of {len(roundtrip_zero)} records")
 
     if len(oneway_positive) > 0:
         with st.expander(f"OneWay with Positive Stay ({len(oneway_positive)} records)"):

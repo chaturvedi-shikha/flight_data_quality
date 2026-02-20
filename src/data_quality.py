@@ -463,17 +463,19 @@ class BookingConsistencyValidator:
         oneway_positive = len(self.flag_oneway_positive_stay())
         same_day = len(self.flag_same_day_bookings())
 
-        # CircleTrip completion rate
-        circle_count = 0
+        # CircleTrip completion rate — count = incomplete bookings
+        circle_incomplete = 0
         circle_desc = "CircleTrip completion rate: N/A"
         if "trip_type" in self.df.columns and "booking_complete" in self.df.columns:
             circle = self.df[self.df["trip_type"] == "CircleTrip"]
-            circle_count = len(circle)
-            if circle_count > 0:
-                rate = round((circle["booking_complete"].sum() / circle_count) * 100, 1)
+            circle_total = len(circle)
+            if circle_total > 0:
+                completed = int(circle["booking_complete"].sum())
+                circle_incomplete = circle_total - completed
+                rate = round((completed / circle_total) * 100, 1)
                 circle_desc = (
                     f"CircleTrip completion rate: {rate}% "
-                    f"({int(circle['booking_complete'].sum())}/{circle_count})"
+                    f"({completed}/{circle_total})"
                 )
             else:
                 circle_desc = "CircleTrip completion rate: 0.0% (0/0)"
@@ -493,7 +495,7 @@ class BookingConsistencyValidator:
             },
             {
                 "check": "CircleTrip low completion",
-                "count": circle_count,
+                "count": circle_incomplete,
                 "severity": "Medium",
                 "description": circle_desc,
             },
