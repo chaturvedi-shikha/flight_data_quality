@@ -13,6 +13,7 @@ from src.data_quality import (
     BookingDataQualityReport,
     BookingCompletionAnalyzer,
     BookingOutlierDetector,
+    BookingConsistencyValidator,
     CustomerBookingValidator,
     detect_dataset_type,
     run_quality_check,
@@ -991,3 +992,129 @@ class TestBookingOutlierDetector:
         assert summary.iloc[0]["outlier_count"] == 0
         assert pd.isna(summary.iloc[0]["Q1"])
         assert pd.isna(summary.iloc[0]["Q3"])
+
+
+class TestBookingConsistencyValidator:
+    """Test suite for logical consistency validation"""
+
+    @pytest.fixture
+    def consistency_data(self):
+        """Sample booking data with known logical inconsistencies"""
+        return pd.DataFrame(
+            {
+                "trip_type": [
+                    "RoundTrip",
+                    "RoundTrip",
+                    "OneWay",
+                    "OneWay",
+                    "OneWay",
+                    "CircleTrip",
+                    "CircleTrip",
+                    "RoundTrip",
+                    "RoundTrip",
+                    "OneWay",
+                ],
+                "length_of_stay": [0, 7, 5, 0, 3, 10, 5, 14, 3, 8],
+                "purchase_lead": [10, 0, 30, 0, 50, 60, 0, 80, 90, 0],
+                "booking_complete": [0, 1, 0, 0, 0, 0, 0, 1, 1, 1],
+                "sales_channel": ["Internet"] * 10,
+                "num_passengers": [1] * 10,
+            }
+        )
+
+    def test_flag_roundtrip_zero_stay(self, consistency_data):
+        """Test flagging RoundTrip bookings with length_of_stay == 0"""
+        validator = BookingConsistencyValidator(consistency_data)
+        result = validator.flag_roundtrip_zero_stay()
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 1  # Only first row: RoundTrip with stay=0
+        assert all(result["trip_type"] == "RoundTrip")
+        assert all(result["length_of_stay"] == 0)
+
+    def test_flag_oneway_positive_stay(self, consistency_data):
+        """Test flagging OneWay bookings with length_of_stay > 0"""
+        validator = BookingConsistencyValidator(consistency_data)
+        result = validator.flag_oneway_positive_stay()
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 3  # Rows with OneWay and stay > 0: 5, 3, 8
+        assert all(result["trip_type"] == "OneWay")
+        assert all(result["length_of_stay"] > 0)
+
+    def test_flag_same_day_bookings(self, consistency_data):
+        """Test flagging same-day bookings (purchase_lead == 0)"""
+        validator = BookingConsistencyValidator(consistency_data)
+        result = validator.flag_same_day_bookings()
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 4  # Rows with purchase_lead=0
+        assert all(result["purchase_lead"] == 0)
+
+    def test_inconsistency_summary_structure(self, consistency_data):
+        """Test that inconsistency summary has expected structure"""
+        validator = BookingConsistencyValidator(consistency_data)
+        result = validator.inconsistency_summary()
+
+        assert isinstance(result, pd.DataFrame)
+        assert "check" in result.columns
+        assert "count" in result.columns
+        assert "severity" in result.columns
+        assert "description" in result.columns
+        assert len(result) == 4  # 4 checks total
+
+    def test_inconsistency_summary_severities(self, consistency_data):
+        """Test that severities are assigned correctly"""
+        validator = BookingConsistencyValidator(consistency_data)
+        result = validator.inconsistency_summary()
+
+        severity_map = dict(zip(result["check"], result["severity"]))
+        assert severity_map["RoundTrip with zero stay"] == "Medium"
+        assert severity_map["OneWay with positive stay"] == "High"
+        assert severity_map["CircleTrip low completion"] == "Medium"
+        assert severity_map["Same-day bookings"] == "Info"
+
+    def test_inconsistency_summary_counts(self, consistency_data):
+        """Test that counts match individual flag methods"""
+        validator = BookingConsistencyValidator(consistency_data)
+        summary = validator.inconsistency_summary()
+
+        count_map = dict(zip(summary["check"], summary["count"]))
+        assert count_map["RoundTrip with zero stay"] == 1
+        assert count_map["OneWay with positive stay"] == 3
+        assert count_map["Same-day bookings"] == 4
+
+    def test_circletrip_completion_rate(self, consistency_data):
+        """Test that CircleTrip completion rate is calculated correctly"""
+        validator = BookingConsistencyValidator(consistency_data)
+        summary = validator.inconsistency_summary()
+
+        circle_row = summary[summary["check"] == "CircleTrip low completion"]
+        # CircleTrip: 2 records, 0 completed = 0% completion
+        assert circle_row.iloc[0]["count"] == 2
+        assert "0.0%" in circle_row.iloc[0]["description"]
+
+    def test_missing_columns(self):
+        """Test graceful handling when required columns are missing"""
+        df = pd.DataFrame({"other_col": [1, 2, 3]})
+        validator = BookingConsistencyValidator(df)
+
+        assert len(validator.flag_roundtrip_zero_stay()) == 0
+        assert len(validator.flag_oneway_positive_stay()) == 0
+        assert len(validator.flag_same_day_bookings()) == 0
+
+    def test_empty_dataframe(self):
+        """Test validator handles empty DataFrame gracefully"""
+        df = pd.DataFrame(
+            columns=[
+                "trip_type",
+                "length_of_stay",
+                "purchase_lead",
+                "booking_complete",
+            ]
+        )
+        validator = BookingConsistencyValidator(df)
+        summary = validator.inconsistency_summary()
+
+        assert len(summary) == 4
+        assert all(summary["count"] == 0)
