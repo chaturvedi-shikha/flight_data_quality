@@ -18,6 +18,7 @@ from data_quality import (
     DataQualityReport,
     BookingDataQualityReport,
     BookingCompletionAnalyzer,
+    BookingOutlierDetector,
     detect_dataset_type,
     PSEUDO_MISSING_VALUE,
 )
@@ -674,6 +675,82 @@ def display_completion_analytics(df: pd.DataFrame):
     st.plotly_chart(fig_vol, use_container_width=True)
 
 
+def display_booking_outliers(df: pd.DataFrame):
+    """Display outlier detection for booking numeric fields"""
+    st.header("🔎 Outlier Detection")
+
+    # Sidebar configurable thresholds
+    with st.sidebar:
+        st.subheader("Outlier Thresholds")
+        max_passengers = st.number_input(
+            "Max passengers", min_value=1, max_value=50, value=6
+        )
+        max_purchase_lead = st.number_input(
+            "Max purchase lead (days)", min_value=1, max_value=1000, value=365
+        )
+        max_length_of_stay = st.number_input(
+            "Max length of stay (days)", min_value=1, max_value=1000, value=365
+        )
+
+    detector = BookingOutlierDetector(df)
+
+    # Threshold-based flagging results
+    st.subheader("Threshold-Based Flags")
+
+    thresholds = {
+        "num_passengers": ("Passengers", max_passengers),
+        "purchase_lead": ("Purchase Lead (days)", max_purchase_lead),
+        "length_of_stay": ("Length of Stay (days)", max_length_of_stay),
+    }
+
+    cols = st.columns(len(thresholds))
+    for col_ui, (col_name, (label, max_val)) in zip(cols, thresholds.items()):
+        flagged = detector.flag_by_threshold(col_name, max_value=max_val)
+        with col_ui:
+            st.metric(
+                f"{label} > {max_val}",
+                f"{len(flagged):,}",
+                delta="Issues found" if len(flagged) > 0 else None,
+                delta_color="inverse",
+            )
+
+    st.markdown("---")
+
+    # IQR outlier summary table
+    st.subheader("IQR-Based Outlier Summary")
+    numeric_cols = [
+        "num_passengers",
+        "purchase_lead",
+        "length_of_stay",
+        "flight_duration",
+    ]
+    available_cols = [c for c in numeric_cols if c in df.columns]
+    summary = detector.iqr_outlier_summary(available_cols)
+
+    if not summary.empty:
+        st.dataframe(
+            summary.style.background_gradient(
+                cmap="Reds", subset=["outlier_count", "outlier_pct"]
+            ),
+            use_container_width=True,
+        )
+
+    st.markdown("---")
+
+    # Box plots for each numeric column
+    st.subheader("Distribution Box Plots")
+    for col_name in available_cols:
+        fig = px.box(
+            df,
+            y=col_name,
+            title=f"Distribution of {col_name}",
+            labels={col_name: col_name.replace("_", " ").title()},
+            points="outliers",
+        )
+        fig.update_layout(height=300)
+        st.plotly_chart(fig, use_container_width=True)
+
+
 def display_download_section(report: dict, report_filename: str):
     """Display download buttons for report exports"""
     import json
@@ -761,6 +838,9 @@ def main():
             st.markdown("---")
 
             display_completion_analytics(df)
+            st.markdown("---")
+
+            display_booking_outliers(df)
             st.markdown("---")
 
             display_null_analysis(report)

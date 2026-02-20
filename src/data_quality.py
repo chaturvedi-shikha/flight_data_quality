@@ -420,6 +420,82 @@ class BookingCompletionAnalyzer:
         return result
 
 
+class BookingOutlierDetector:
+    """Detect outliers in booking numeric fields using thresholds and IQR"""
+
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
+
+    def flag_by_threshold(self, column: str, max_value: float) -> pd.DataFrame:
+        """Flag rows where column value exceeds a business threshold.
+
+        Args:
+            column: Column name to check
+            max_value: Maximum acceptable value
+
+        Returns:
+            DataFrame of rows exceeding the threshold
+        """
+        if column not in self.df.columns:
+            return pd.DataFrame()
+        mask = self.df[column] > max_value
+        return self.df[mask]
+
+    def iqr_outlier_summary(
+        self, columns: List[str], threshold: float = 1.5
+    ) -> pd.DataFrame:
+        """Generate IQR-based outlier summary for given columns.
+
+        Args:
+            columns: List of numeric column names to analyze
+            threshold: IQR multiplier (default 1.5)
+
+        Returns:
+            DataFrame with columns: column, outlier_count, outlier_pct,
+            Q1, Q3, IQR, lower_bound, upper_bound
+        """
+        rows = []
+        total = len(self.df)
+        for col in columns:
+            if col not in self.df.columns:
+                continue
+            col_data = self.df[col].dropna()
+            if len(col_data) == 0:
+                rows.append(
+                    {
+                        "column": col,
+                        "outlier_count": 0,
+                        "outlier_pct": 0.0,
+                        "Q1": np.nan,
+                        "Q3": np.nan,
+                        "IQR": np.nan,
+                        "lower_bound": np.nan,
+                        "upper_bound": np.nan,
+                    }
+                )
+                continue
+            q1 = float(col_data.quantile(0.25))
+            q3 = float(col_data.quantile(0.75))
+            iqr = q3 - q1
+            lower = q1 - threshold * iqr
+            upper = q3 + threshold * iqr
+            outlier_count = int(((self.df[col] < lower) | (self.df[col] > upper)).sum())
+            outlier_pct = round((outlier_count / total) * 100, 2) if total > 0 else 0.0
+            rows.append(
+                {
+                    "column": col,
+                    "outlier_count": outlier_count,
+                    "outlier_pct": outlier_pct,
+                    "Q1": round(q1, 2),
+                    "Q3": round(q3, 2),
+                    "IQR": round(iqr, 2),
+                    "lower_bound": round(lower, 2),
+                    "upper_bound": round(upper, 2),
+                }
+            )
+        return pd.DataFrame(rows)
+
+
 class BaseDataQualityReport:
     """Base class with shared report generation logic"""
 
