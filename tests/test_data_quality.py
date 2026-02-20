@@ -12,6 +12,7 @@ from src.data_quality import (
     DataQualityReport,
     BookingDataQualityReport,
     BookingCompletionAnalyzer,
+    BookingOutlierDetector,
     CustomerBookingValidator,
     detect_dataset_type,
     run_quality_check,
@@ -871,3 +872,120 @@ class TestBookingCompletionAnalyzer:
 
         assert result["total_bookings"] == 0
         assert result["completion_rate"] == 0.0
+
+
+class TestBookingOutlierDetector:
+    """Test suite for booking outlier detection"""
+
+    @pytest.fixture
+    def booking_data(self):
+        """Sample booking data with known outliers"""
+        return pd.DataFrame(
+            {
+                "num_passengers": [1, 2, 3, 1, 8, 2, 1, 10, 1, 2],
+                "purchase_lead": [10, 50, 100, 200, 400, 30, 60, 500, 20, 80],
+                "length_of_stay": [5, 10, 15, 30, 400, 7, 14, 800, 3, 20],
+                "flight_duration": [5.5, 1.5, 3.0, 5.5, 5.0, 5.5, 1.5, 3.0, 5.5, 5.0],
+                "booking_complete": [1, 0, 0, 1, 1, 0, 1, 0, 1, 0],
+                "sales_channel": ["Internet"] * 10,
+                "trip_type": ["RoundTrip"] * 10,
+            }
+        )
+
+    def test_flag_length_of_stay_over_365(self, booking_data):
+        """Test flagging length_of_stay > 365 days"""
+        detector = BookingOutlierDetector(booking_data)
+        result = detector.flag_by_threshold("length_of_stay", max_value=365)
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 2  # 400 and 800
+        assert all(result["length_of_stay"] > 365)
+
+    def test_flag_purchase_lead_over_365(self, booking_data):
+        """Test flagging purchase_lead > 365 days"""
+        detector = BookingOutlierDetector(booking_data)
+        result = detector.flag_by_threshold("purchase_lead", max_value=365)
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 2  # 400 and 500
+        assert all(result["purchase_lead"] > 365)
+
+    def test_flag_num_passengers_over_6(self, booking_data):
+        """Test flagging num_passengers > 6"""
+        detector = BookingOutlierDetector(booking_data)
+        result = detector.flag_by_threshold("num_passengers", max_value=6)
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 2  # 8 and 10
+        assert all(result["num_passengers"] > 6)
+
+    def test_flag_missing_column(self, booking_data):
+        """Test graceful handling of missing column"""
+        detector = BookingOutlierDetector(booking_data)
+        result = detector.flag_by_threshold("nonexistent_column", max_value=100)
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 0
+
+    def test_iqr_outlier_summary(self, booking_data):
+        """Test IQR-based outlier summary table"""
+        detector = BookingOutlierDetector(booking_data)
+        columns = [
+            "num_passengers",
+            "purchase_lead",
+            "length_of_stay",
+            "flight_duration",
+        ]
+        result = detector.iqr_outlier_summary(columns)
+
+        assert isinstance(result, pd.DataFrame)
+        assert "column" in result.columns
+        assert "outlier_count" in result.columns
+        assert "outlier_pct" in result.columns
+        assert "Q1" in result.columns
+        assert "Q3" in result.columns
+        assert "IQR" in result.columns
+        assert "lower_bound" in result.columns
+        assert "upper_bound" in result.columns
+        assert len(result) == 4
+
+    def test_iqr_outlier_summary_percentages(self, booking_data):
+        """Test that outlier percentages are calculated correctly"""
+        detector = BookingOutlierDetector(booking_data)
+        result = detector.iqr_outlier_summary(["num_passengers"])
+
+        row = result.iloc[0]
+        assert row["outlier_pct"] == round(
+            (row["outlier_count"] / len(booking_data)) * 100, 2
+        )
+
+    def test_iqr_outlier_summary_skips_missing_columns(self, booking_data):
+        """Test that missing columns are silently skipped"""
+        detector = BookingOutlierDetector(booking_data)
+        result = detector.iqr_outlier_summary(["num_passengers", "nonexistent"])
+
+        assert len(result) == 1
+        assert result.iloc[0]["column"] == "num_passengers"
+
+    def test_iqr_custom_threshold(self, booking_data):
+        """Test IQR summary with custom threshold"""
+        detector = BookingOutlierDetector(booking_data)
+        result_strict = detector.iqr_outlier_summary(["purchase_lead"], threshold=1.0)
+        result_lenient = detector.iqr_outlier_summary(["purchase_lead"], threshold=3.0)
+
+        # Stricter threshold should find more or equal outliers
+        assert (
+            result_strict.iloc[0]["outlier_count"]
+            >= result_lenient.iloc[0]["outlier_count"]
+        )
+
+    def test_empty_dataframe(self):
+        """Test detector handles empty DataFrame gracefully"""
+        df = pd.DataFrame(columns=["num_passengers", "purchase_lead", "length_of_stay"])
+        detector = BookingOutlierDetector(df)
+        result = detector.flag_by_threshold("num_passengers", max_value=6)
+        assert len(result) == 0
+
+        summary = detector.iqr_outlier_summary(["num_passengers"])
+        assert len(summary) == 1
+        assert summary.iloc[0]["outlier_count"] == 0
