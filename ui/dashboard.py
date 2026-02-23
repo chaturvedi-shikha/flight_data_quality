@@ -842,14 +842,23 @@ def display_booking_consistency(df: pd.DataFrame):
                 st.info(f"Showing first 50 of {len(same_day)} records")
 
 
+@st.cache_data
+def _convert_to_csv(df: pd.DataFrame) -> str:
+    """Cache CSV conversion to avoid recomputing on every rerun."""
+    return df.to_csv(index=False)
+
+
 def display_duplicate_and_origin_analysis(df: pd.DataFrame):
     """Display duplicate detection and booking origin cleanup analysis"""
     st.header("🔁 Duplicate Detection & Origin Cleanup")
 
     analyzer = BookingDuplicateAndOriginAnalyzer(df)
+
+    # Compute all results once to avoid redundant passes
     preview = analyzer.dedup_preview()
     not_set = analyzer.flag_not_set_origins()
-    summary = analyzer.origin_quality_summary()
+    low_vol = analyzer.low_volume_origins()
+    summary = analyzer.origin_quality_summary(not_set=not_set, low_vol=low_vol)
 
     # Metric cards
     col1, col2, col3, col4 = st.columns(4)
@@ -878,7 +887,6 @@ def display_duplicate_and_origin_analysis(df: pd.DataFrame):
             delta_color="inverse",
         )
     with col4:
-        low_vol = analyzer.low_volume_origins()
         st.metric(
             "Low-Volume Origins (<5)",
             f"{len(low_vol):,}",
@@ -928,7 +936,7 @@ def display_duplicate_and_origin_analysis(df: pd.DataFrame):
     # Export cleaned dataset
     st.subheader("Export Cleaned Dataset")
     clean = analyzer.clean_dataset()
-    csv_data = clean.to_csv(index=False)
+    csv_data = _convert_to_csv(clean)
     st.download_button(
         label=f"📥 Download De-duplicated Dataset ({len(clean):,} rows)",
         data=csv_data,
