@@ -187,10 +187,10 @@
     <h2>Executive Summary</h2>
     <p>
         Sprint 1 focuses on building the <span class="highlight">Customer Booking Data Quality</span> analytics suite.
-        Of <span class="highlight">6 sprint stories</span> planned, <span class="success">4 are complete</span> (Core Framework + Completion Rate + Outlier Detection + Consistency Validation).
-        <span class="highlight">2 stories remain in Todo</span> with no items currently in progress.
-        The project also has <span class="highlight">5 open bugs/enhancements</span> (#7&ndash;#11) from prior work.
-        Overall across the repository: <span class="success">8 of 15 total issues closed</span> (53% resolution rate).
+        Of <span class="highlight">6 sprint stories</span> planned, <span class="success">5 are complete</span> (Core Framework + Completion Rate + Outlier Detection + Consistency Validation + Duplicate Detection).
+        <span class="highlight">1 story remains in Todo</span> (#16 Route Analysis) with no items currently in progress.
+        The project also has <span class="highlight">5 open bugs/enhancements</span> (#7&ndash;#11) from prior work, plus <span class="highlight">2 new stories</span> (#22, #23) added to the backlog.
+        Overall across the repository: <span class="success">9 of 17 total issues closed</span> (53% resolution rate).
     </p>
 </div>
 
@@ -198,21 +198,21 @@
 <div class="kpi-grid">
     <div class="kpi blue">
         <div class="kpi-icon">&#128203;</div>
-        <div class="kpi-value">15</div>
+        <div class="kpi-value">17</div>
         <div class="kpi-label">Total Issues</div>
         <div class="kpi-sub">Across all sprints</div>
     </div>
     <div class="kpi green">
         <div class="kpi-icon">&#9989;</div>
-        <div class="kpi-value">8</div>
+        <div class="kpi-value">9</div>
         <div class="kpi-label">Closed</div>
-        <div class="kpi-sub">#1-4, #12-15</div>
+        <div class="kpi-sub">#1-4, #12-15, #17</div>
     </div>
     <div class="kpi amber">
         <div class="kpi-icon">&#128221;</div>
-        <div class="kpi-value">7</div>
+        <div class="kpi-value">8</div>
         <div class="kpi-label">Open</div>
-        <div class="kpi-sub">2 bugs, 3 enhancements, 2 stories</div>
+        <div class="kpi-sub">2 bugs, 3 enhancements, 3 stories</div>
     </div>
     <div class="kpi red">
         <div class="kpi-icon">&#128027;</div>
@@ -228,9 +228,9 @@
     </div>
     <div class="kpi green">
         <div class="kpi-icon">&#127919;</div>
-        <div class="kpi-value">67%</div>
+        <div class="kpi-value">83%</div>
         <div class="kpi-label">Sprint Progress</div>
-        <div class="kpi-sub">4 of 6 sprint stories</div>
+        <div class="kpi-sub">5 of 6 sprint stories</div>
     </div>
 </div>
 
@@ -238,14 +238,14 @@
 <div class="progress-section">
     <h2>Sprint 1 Progress (Booking Analytics Stories)</h2>
     <div class="progress-track">
-        <div class="progress-fill done" style="width:66.7%">4</div>
+        <div class="progress-fill done" style="width:83.3%">5</div>
         <div class="progress-fill inprog" style="width:0%"></div>
-        <div class="progress-fill todo" style="width:33.3%">2</div>
+        <div class="progress-fill todo" style="width:16.7%">1</div>
     </div>
     <div class="progress-legend">
-        <div class="progress-legend-item"><div class="progress-legend-dot" style="background:#36b37e"></div> Done (4)</div>
+        <div class="progress-legend-item"><div class="progress-legend-dot" style="background:#36b37e"></div> Done (5)</div>
         <div class="progress-legend-item"><div class="progress-legend-dot" style="background:#0065ff"></div> In Progress (0)</div>
-        <div class="progress-legend-item"><div class="progress-legend-dot" style="background:#dfe1e6"></div> Todo (2)</div>
+        <div class="progress-legend-item"><div class="progress-legend-dot" style="background:#dfe1e6"></div> Todo (1)</div>
     </div>
 </div>
 
@@ -255,7 +255,7 @@
     <div class="kanban-col">
         <div class="kanban-header todo">
             <span class="kanban-title">Todo</span>
-            <span class="kanban-count">2</span>
+            <span class="kanban-count">3</span>
         </div>
         <div class="kanban-card todo">
             <div class="card-id"><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/16" target="_blank">#16</a></div>
@@ -265,8 +265,15 @@
             </div>
         </div>
         <div class="kanban-card todo">
-            <div class="card-id"><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/17" target="_blank">#17</a></div>
-            <div class="card-title">Duplicate Detection and Booking Origin Cleanup</div>
+            <div class="card-id"><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/22" target="_blank">#22</a></div>
+            <div class="card-title">Purchase Lead Time Segmentation</div>
+            <div class="card-meta">
+                <span class="card-priority p2">P2</span>
+            </div>
+        </div>
+        <div class="kanban-card todo">
+            <div class="card-id"><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/23" target="_blank">#23</a></div>
+            <div class="card-title">Flight Hour Temporal Analysis</div>
             <div class="card-meta">
                 <span class="card-priority p2">P2</span>
             </div>
@@ -286,7 +293,14 @@
     <div class="kanban-col">
         <div class="kanban-header done">
             <span class="kanban-title">Done</span>
-            <span class="kanban-count">4</span>
+            <span class="kanban-count">5</span>
+        </div>
+        <div class="kanban-card done">
+            <div class="card-id"><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/17" target="_blank">#17</a></div>
+            <div class="card-title">Duplicate Detection and Booking Origin Cleanup</div>
+            <div class="card-meta">
+                <span class="card-priority p2">P2</span>
+            </div>
         </div>
         <div class="kanban-card done">
             <div class="card-id"><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/15" target="_blank">#15</a></div>
@@ -326,8 +340,8 @@
         <h2>Sprint Velocity</h2>
         <div class="velocity-bar">
             <div class="vel-col">
-                <div class="vel-value">4</div>
-                <div class="vel-bar done-bar" style="height:80px"></div>
+                <div class="vel-value">5</div>
+                <div class="vel-bar done-bar" style="height:100px"></div>
                 <div class="vel-label">Completed</div>
             </div>
             <div class="vel-col">
@@ -336,8 +350,8 @@
                 <div class="vel-label">Planned</div>
             </div>
             <div class="vel-col">
-                <div class="vel-value">2</div>
-                <div class="vel-bar projected" style="height:40px"></div>
+                <div class="vel-value">1</div>
+                <div class="vel-bar projected" style="height:20px"></div>
                 <div class="vel-label">Remaining</div>
             </div>
         </div>
@@ -379,13 +393,20 @@
                 </div>
                 <div class="timeline-label">2</div>
             </div>
+            <div class="timeline-row">
+                <div class="timeline-date">Feb 23</div>
+                <div class="timeline-bar-track">
+                    <div class="timeline-bar-fill green" style="width:25%"></div>
+                </div>
+                <div class="timeline-label">1</div>
+            </div>
         </div>
 
         <p style="font-size:12px; color:#6b778c; margin-top:14px; line-height:1.5;">
             <strong>Sprint Target:</strong> 6 stories &middot;
-            <strong>Completed:</strong> 4 stories &middot;
-            <strong>Velocity:</strong> 67% &middot;
-            <strong>PRs Merged:</strong> 6 total
+            <strong>Completed:</strong> 5 stories &middot;
+            <strong>Velocity:</strong> 83% &middot;
+            <strong>PRs Merged:</strong> 7 total
         </p>
     </div>
 
@@ -394,9 +415,9 @@
         <h2>Risks &amp; Blockers</h2>
         <ul class="risk-list">
             <li class="risk-item">
-                <span class="risk-icon">&#128993;</span>
+                <span class="risk-icon">&#128994;</span>
                 <div>
-                    <div class="risk-text"><strong>2 sprint stories still in Todo</strong> &mdash; #16 (Route Analysis) and #17 (Duplicate Detection) need assignment.</div>
+                    <div class="risk-text"><strong>1 sprint story remaining in Todo</strong> &mdash; #16 (Route Analysis) needs assignment. On track to complete before sprint end.</div>
                 </div>
                 <span class="risk-severity low">Low</span>
             </li>
@@ -410,7 +431,7 @@
             <li class="risk-item">
                 <span class="risk-icon">&#128994;</span>
                 <div>
-                    <div class="risk-text"><strong>Sprint at 67% completion</strong> &mdash; Ahead of schedule with 4 of 6 stories done and 8 days remaining.</div>
+                    <div class="risk-text"><strong>Sprint at 83% completion</strong> &mdash; Well ahead of schedule with 5 of 6 stories done and 5 days remaining.</div>
                 </div>
                 <span class="risk-severity low">Low</span>
             </li>
@@ -422,9 +443,9 @@
 <div class="table-section">
     <h2>All Issues</h2>
     <div class="filter-bar">
-        <button class="filter-btn active" onclick="filterIssues('all', this)">All (15)</button>
-        <button class="filter-btn" onclick="filterIssues('Open', this)">Open (7)</button>
-        <button class="filter-btn" onclick="filterIssues('Closed', this)">Closed (8)</button>
+        <button class="filter-btn active" onclick="filterIssues('all', this)">All (17)</button>
+        <button class="filter-btn" onclick="filterIssues('Open', this)">Open (8)</button>
+        <button class="filter-btn" onclick="filterIssues('Closed', this)">Closed (9)</button>
         <button class="filter-btn" onclick="filterIssues('bug', this)">Bugs (2)</button>
     </div>
     <div style="overflow-x:auto;">
@@ -552,12 +573,28 @@
                 <td>Feb 15</td>
                 <td style="color:#97a0af;">&mdash;</td>
             </tr>
-            <tr data-status="Open">
+            <tr data-status="Closed">
                 <td><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/17" target="_blank" style="color:#0052cc; text-decoration:none; font-weight:600;">#17</a></td>
                 <td>Duplicate Detection and Booking Origin Cleanup</td>
-                <td><span class="badge open">Open</span></td>
+                <td><span class="badge closed">Closed</span></td>
                 <td><span class="card-priority p2">P2</span></td>
                 <td>Feb 15</td>
+                <td>Feb 23</td>
+            </tr>
+            <tr data-status="Open">
+                <td><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/22" target="_blank" style="color:#0052cc; text-decoration:none; font-weight:600;">#22</a></td>
+                <td>Purchase Lead Time Segmentation</td>
+                <td><span class="badge open">Open</span></td>
+                <td><span class="card-priority p2">P2</span></td>
+                <td>Feb 23</td>
+                <td style="color:#97a0af;">&mdash;</td>
+            </tr>
+            <tr data-status="Open">
+                <td><a href="https://github.com/chaturvedi-shikha/flight_data_quality/issues/23" target="_blank" style="color:#0052cc; text-decoration:none; font-weight:600;">#23</a></td>
+                <td>Flight Hour Temporal Analysis</td>
+                <td><span class="badge open">Open</span></td>
+                <td><span class="card-priority p2">P2</span></td>
+                <td>Feb 23</td>
                 <td style="color:#97a0af;">&mdash;</td>
             </tr>
         </tbody>
@@ -569,7 +606,7 @@
 
 <!-- Footer -->
 <div class="footer">
-    Generated: February 20, 2026 &middot;
+    Generated: February 23, 2026 &middot;
     Source: <a href="https://github.com/users/chaturvedi-shikha/projects/1/views/1" target="_blank">Project Board</a> &middot;
     <a href="https://github.com/chaturvedi-shikha/flight_data_quality" target="_blank">chaturvedi-shikha/flight_data_quality</a>
 </div>
