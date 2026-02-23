@@ -20,6 +20,7 @@ from data_quality import (
     BookingCompletionAnalyzer,
     BookingOutlierDetector,
     BookingConsistencyValidator,
+    BookingDuplicateAndOriginAnalyzer,
     detect_dataset_type,
     PSEUDO_MISSING_VALUE,
 )
@@ -841,6 +842,109 @@ def display_booking_consistency(df: pd.DataFrame):
                 st.info(f"Showing first 50 of {len(same_day)} records")
 
 
+@st.cache_data
+def _convert_to_csv(df: pd.DataFrame) -> str:
+    """Cache CSV conversion to avoid recomputing on every rerun."""
+    return df.to_csv(index=False)
+
+
+def display_duplicate_and_origin_analysis(df: pd.DataFrame):
+    """Display duplicate detection and booking origin cleanup analysis"""
+    st.header("🔁 Duplicate Detection & Origin Cleanup")
+
+    analyzer = BookingDuplicateAndOriginAnalyzer(df)
+
+    # Compute all results once to avoid redundant passes
+    preview = analyzer.dedup_preview()
+    not_set = analyzer.flag_not_set_origins()
+    low_vol = analyzer.low_volume_origins()
+    summary = analyzer.origin_quality_summary(not_set=not_set, low_vol=low_vol)
+
+    # Metric cards
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        dup_pct = (
+            round((preview["duplicates_count"] / len(df)) * 100, 2)
+            if len(df) > 0
+            else 0
+        )
+        st.metric(
+            "Exact Duplicates",
+            f"{preview['duplicates_count']:,}",
+            delta=f"{dup_pct}%" if preview["duplicates_count"] > 0 else None,
+            delta_color="inverse",
+        )
+    with col2:
+        st.metric(
+            "Clean Row Count",
+            f"{preview['clean_count']:,}",
+        )
+    with col3:
+        st.metric(
+            '"(not set)" Origins',
+            f"{len(not_set):,}",
+            delta="Issues found" if len(not_set) > 0 else None,
+            delta_color="inverse",
+        )
+    with col4:
+        st.metric(
+            "Low-Volume Origins (<5)",
+            f"{len(low_vol):,}",
+            delta=f"of {summary['total_origins']} total" if len(low_vol) > 0 else None,
+            delta_color="off",
+        )
+
+    st.markdown("---")
+
+    # Duplicate preview
+    st.subheader("Duplicate Rows Preview")
+    if preview["duplicates_count"] > 0:
+        with st.expander(f"View {preview['duplicates_count']:,} duplicate rows"):
+            st.dataframe(preview["duplicate_rows"].head(50), use_container_width=True)
+            if preview["duplicates_count"] > 50:
+                st.info(
+                    f"Showing first 50 of {preview['duplicates_count']:,} duplicates"
+                )
+    else:
+        st.success("No duplicate rows found!")
+
+    st.markdown("---")
+
+    # Low-volume origins table
+    st.subheader("Low-Volume Booking Origins")
+    if len(low_vol) > 0:
+        fig = px.bar(
+            low_vol.sort_values("count"),
+            x="count",
+            y="booking_origin",
+            orientation="h",
+            title=f"Origins with Fewer Than 5 Bookings ({len(low_vol)} countries)",
+            labels={"count": "Bookings", "booking_origin": "Origin"},
+            color="count",
+            color_continuous_scale="Reds_r",
+        )
+        fig.update_layout(
+            yaxis={"categoryorder": "total ascending"},
+            height=max(300, len(low_vol) * 25),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.success("All origins have sufficient booking volume.")
+
+    st.markdown("---")
+
+    # Export cleaned dataset
+    st.subheader("Export Cleaned Dataset")
+    clean = analyzer.clean_dataset()
+    csv_data = _convert_to_csv(clean)
+    st.download_button(
+        label=f"📥 Download De-duplicated Dataset ({len(clean):,} rows)",
+        data=csv_data,
+        file_name="customer_booking_cleaned.csv",
+        mime="text/csv",
+    )
+
+
 def display_download_section(report: dict, report_filename: str):
     """Display download buttons for report exports"""
     import json
@@ -934,6 +1038,9 @@ def main():
             st.markdown("---")
 
             display_booking_consistency(df)
+            st.markdown("---")
+
+            display_duplicate_and_origin_analysis(df)
             st.markdown("---")
 
             display_null_analysis(report)
