@@ -14,6 +14,7 @@ from src.data_quality import (
     BookingCompletionAnalyzer,
     BookingOutlierDetector,
     BookingConsistencyValidator,
+    BookingDuplicateAndOriginAnalyzer,
     CustomerBookingValidator,
     detect_dataset_type,
     run_quality_check,
@@ -1118,3 +1119,162 @@ class TestBookingConsistencyValidator:
 
         assert len(summary) == 4
         assert all(summary["count"] == 0)
+
+
+class TestBookingDuplicateAndOriginAnalyzer:
+    """Test suite for duplicate detection and booking origin cleanup"""
+
+    @pytest.fixture
+    def dup_data(self):
+        """Sample data with known duplicates and origin issues"""
+        return pd.DataFrame(
+            {
+                "num_passengers": [1, 2, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1],
+                "sales_channel": [
+                    "Internet",
+                    "Internet",
+                    "Internet",
+                    "Internet",
+                    "Mobile",
+                    "Internet",
+                    "Internet",
+                    "Internet",
+                    "Internet",
+                    "Internet",
+                    "Internet",
+                    "Mobile",
+                ],
+                "trip_type": [
+                    "RoundTrip",
+                    "OneWay",
+                    "RoundTrip",
+                    "OneWay",
+                    "RoundTrip",
+                    "RoundTrip",
+                    "RoundTrip",
+                    "OneWay",
+                    "RoundTrip",
+                    "RoundTrip",
+                    "OneWay",
+                    "RoundTrip",
+                ],
+                "booking_complete": [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1],
+                "booking_origin": [
+                    "US",
+                    "UK",
+                    "US",
+                    "UK",
+                    "(not set)",
+                    "AU",
+                    "NZ",
+                    "(not set)",
+                    "Xanadu",
+                    "Narnia",
+                    "UK",
+                    "(not set)",
+                ],
+            }
+        )
+
+    def test_find_duplicates(self, dup_data):
+        """Test that exact duplicate rows are identified"""
+        analyzer = BookingDuplicateAndOriginAnalyzer(dup_data)
+        result = analyzer.find_duplicates()
+
+        assert isinstance(result, pd.DataFrame)
+        # Rows 0,2 identical; rows 1,3,10 identical; rows 4,11 identical
+        # Duplicates: rows 2, 3, 10, 11 = 4 duplicates
+        assert len(result) == 4
+
+    def test_dedup_preview(self, dup_data):
+        """Test de-duplication preview shows correct counts"""
+        analyzer = BookingDuplicateAndOriginAnalyzer(dup_data)
+        preview = analyzer.dedup_preview()
+
+        assert "duplicates_count" in preview
+        assert "clean_count" in preview
+        assert "duplicate_rows" in preview
+        assert isinstance(preview["duplicate_rows"], pd.DataFrame)
+        assert preview["duplicates_count"] == 4
+        assert preview["clean_count"] == len(dup_data) - 4
+
+    def test_flag_not_set_origins(self, dup_data):
+        """Test flagging of (not set) booking origins"""
+        analyzer = BookingDuplicateAndOriginAnalyzer(dup_data)
+        result = analyzer.flag_not_set_origins()
+
+        assert isinstance(result, pd.DataFrame)
+        assert len(result) == 3  # Three "(not set)" entries
+        assert all(result["booking_origin"] == "(not set)")
+
+    def test_low_volume_origins(self, dup_data):
+        """Test detection of origins with fewer than min_bookings"""
+        analyzer = BookingDuplicateAndOriginAnalyzer(dup_data)
+        result = analyzer.low_volume_origins(min_bookings=2)
+
+        assert isinstance(result, pd.DataFrame)
+        assert "booking_origin" in result.columns
+        assert "count" in result.columns
+        # AU=1, NZ=1, Xanadu=1, Narnia=1 all have < 2 bookings
+        assert len(result) == 4
+
+    def test_low_volume_origins_default_threshold(self, dup_data):
+        """Test low volume with default threshold of 5"""
+        analyzer = BookingDuplicateAndOriginAnalyzer(dup_data)
+        result = analyzer.low_volume_origins()
+
+        # All origins have < 5 bookings except maybe US(2), UK(3), (not set)(3)
+        # US=2, UK=3, (not set)=3, AU=1, NZ=1, Xanadu=1, Narnia=1 — all < 5
+        assert len(result) == 7
+
+    def test_origin_quality_summary(self, dup_data):
+        """Test origin quality summary structure"""
+        analyzer = BookingDuplicateAndOriginAnalyzer(dup_data)
+        result = analyzer.origin_quality_summary()
+
+        assert isinstance(result, dict)
+        assert "total_origins" in result
+        assert "not_set_count" in result
+        assert "low_volume_count" in result
+        assert result["not_set_count"] == 3
+        assert result["total_origins"] == 7  # 7 unique origins
+
+    def test_clean_dataset(self, dup_data):
+        """Test that clean dataset removes duplicates"""
+        analyzer = BookingDuplicateAndOriginAnalyzer(dup_data)
+        clean = analyzer.clean_dataset()
+
+        assert isinstance(clean, pd.DataFrame)
+        assert len(clean) == len(dup_data) - 4  # 4 duplicates removed
+        # No duplicates remain
+        assert clean.duplicated().sum() == 0
+
+    def test_empty_dataframe(self):
+        """Test analyzer handles empty DataFrame gracefully"""
+        df = pd.DataFrame(
+            columns=[
+                "num_passengers",
+                "sales_channel",
+                "booking_origin",
+                "booking_complete",
+            ]
+        )
+        analyzer = BookingDuplicateAndOriginAnalyzer(df)
+
+        assert len(analyzer.find_duplicates()) == 0
+        assert analyzer.dedup_preview()["duplicates_count"] == 0
+        assert len(analyzer.flag_not_set_origins()) == 0
+        assert len(analyzer.low_volume_origins()) == 0
+
+    def test_missing_booking_origin_column(self):
+        """Test graceful handling when booking_origin column is missing"""
+        df = pd.DataFrame(
+            {"num_passengers": [1, 2], "sales_channel": ["Internet", "Mobile"]}
+        )
+        analyzer = BookingDuplicateAndOriginAnalyzer(df)
+
+        assert len(analyzer.flag_not_set_origins()) == 0
+        assert len(analyzer.low_volume_origins()) == 0
+        summary = analyzer.origin_quality_summary()
+        assert summary["total_origins"] == 0
+        assert summary["not_set_count"] == 0

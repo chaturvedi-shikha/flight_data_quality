@@ -509,6 +509,64 @@ class BookingConsistencyValidator:
         return pd.DataFrame(rows)
 
 
+class BookingDuplicateAndOriginAnalyzer:
+    """Detect duplicate rows and analyze booking_origin data quality"""
+
+    def __init__(self, df: pd.DataFrame):
+        self.df = df
+
+    def find_duplicates(self) -> pd.DataFrame:
+        """Return duplicate rows (keeps first occurrence, flags the rest)."""
+        mask = self.df.duplicated(keep="first")
+        return self.df[mask]
+
+    def dedup_preview(self) -> Dict[str, Any]:
+        """Preview what de-duplication would look like."""
+        duplicates = self.find_duplicates()
+        return {
+            "duplicates_count": len(duplicates),
+            "clean_count": len(self.df) - len(duplicates),
+            "duplicate_rows": duplicates,
+        }
+
+    def clean_dataset(self) -> pd.DataFrame:
+        """Return dataset with duplicates removed."""
+        return self.df.drop_duplicates(keep="first")
+
+    def flag_not_set_origins(self) -> pd.DataFrame:
+        """Flag rows where booking_origin is '(not set)'."""
+        if "booking_origin" not in self.df.columns:
+            return pd.DataFrame()
+        mask = self.df["booking_origin"].str.strip() == PSEUDO_MISSING_VALUE
+        return self.df[mask]
+
+    def low_volume_origins(self, min_bookings: int = 5) -> pd.DataFrame:
+        """Return origins with fewer than min_bookings bookings.
+
+        Returns:
+            DataFrame with columns: booking_origin, count
+        """
+        if "booking_origin" not in self.df.columns:
+            return pd.DataFrame(columns=["booking_origin", "count"])
+        counts = self.df["booking_origin"].value_counts().reset_index()
+        counts.columns = ["booking_origin", "count"]
+        return counts[counts["count"] < min_bookings].reset_index(drop=True)
+
+    def origin_quality_summary(self) -> Dict[str, Any]:
+        """Summary of booking_origin data quality."""
+        if "booking_origin" not in self.df.columns:
+            return {
+                "total_origins": 0,
+                "not_set_count": 0,
+                "low_volume_count": 0,
+            }
+        return {
+            "total_origins": self.df["booking_origin"].nunique(),
+            "not_set_count": len(self.flag_not_set_origins()),
+            "low_volume_count": len(self.low_volume_origins()),
+        }
+
+
 class BookingOutlierDetector:
     """Detect outliers in booking numeric fields using thresholds and IQR"""
 
